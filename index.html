@@ -1,0 +1,509 @@
+<title>SmartGrid Energy — Customer Portal (Live Demo)</title>
+<style>
+  :root{
+    --paper:#eef1ef;--surface:#fff;--surface2:#f4f6f4;--ink:#14201c;--muted:#5b6a64;--faint:#8a978f;
+    --hair:#dcded8;--border:#14202014;--baseline:#c3c2b7;--brand:#0a6e5c;--brand-ink:#fff;
+    --s1:#2a78d6;--s2:#008300;--s3:#e87ba4;--s4:#eda100;--s5:#1baf7a;--s6:#eb6834;
+    --good:#0a7d3f;--goodbg:#0a7d3f1f;--warn:#b8791a;--warnbg:#fab21930;--crit:#d03b3b;--critbg:#d03b3b1f;--infobg:#2a78d61f;
+    --radius:12px;--radius-sm:8px;--shadow:0 1px 2px #14202010,0 6px 22px #1420200c;
+    --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  @media(prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --paper:#0d0d0d;--surface:#161e1a;--surface2:#1d2723;--ink:#eef2ee;--muted:#9fb0a8;--faint:#6f817a;
+    --hair:#263029;--border:#ffffff16;--baseline:#383835;--brand:#2fae93;--brand-ink:#08110e;
+    --s1:#3987e5;--s3:#d55181;--s4:#c98500;--s6:#d95926;--good:#37b06a;--goodbg:#37b06a24;
+    --warn:#d69a3e;--warnbg:#d69a3e26;--crit:#e06a6a;--critbg:#e06a6a22;--infobg:#3987e524;
+    --shadow:0 1px 2px #0006,0 8px 26px #0004;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#0d0d0d;--surface:#161e1a;--surface2:#1d2723;--ink:#eef2ee;--muted:#9fb0a8;--faint:#6f817a;
+    --hair:#263029;--border:#ffffff16;--baseline:#383835;--brand:#2fae93;--brand-ink:#08110e;
+    --s1:#3987e5;--s3:#d55181;--s4:#c98500;--s6:#d95926;--good:#37b06a;--goodbg:#37b06a24;
+    --warn:#d69a3e;--warnbg:#d69a3e26;--crit:#e06a6a;--critbg:#e06a6a22;--infobg:#3987e524;
+    --shadow:0 1px 2px #0006,0 8px 26px #0004;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:var(--font);background:var(--paper);color:var(--ink);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{margin:0 0 .4em;line-height:1.25;font-weight:660}
+  h1{font-size:1.5rem;letter-spacing:-.01em}h2{font-size:1.15rem}h3{font-size:1rem}
+  button{font-family:inherit;font-size:.94rem;cursor:pointer}
+  a{color:var(--s1);cursor:pointer;text-decoration:none}a:hover{text-decoration:underline}
+  select,input[type=number],input[type=text]{font-family:inherit;font-size:.92rem;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--ink)}
+  input[type=range]{width:100%;accent-color:var(--brand)}
+  .muted{color:var(--muted)}.faint{color:var(--faint)}.small{font-size:.83rem}
+  .row{display:flex;align-items:center;gap:10px}.wrap{flex-wrap:wrap}.between{justify-content:space-between}.spacer{flex:1}
+  .mt{margin-top:16px}.mt-s{margin-top:8px}
+  .btn{border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:var(--radius-sm);padding:8px 14px;font-weight:600;transition:background .15s}
+  .btn:hover{background:var(--surface2)}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+  .card+.card{margin-top:16px}
+  .card-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .grid{display:grid;gap:16px}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .stat .l{color:var(--muted);font-size:.82rem}.stat .v{font-size:1.55rem;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums}.stat .s{color:var(--faint);font-size:.8rem;margin-top:2px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:.82rem;font-weight:560;cursor:pointer}
+  .chip.active{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:.72rem;font-weight:660;text-transform:uppercase;letter-spacing:.03em}
+  .badge.good{background:var(--goodbg);color:var(--good)}.badge.warn{background:var(--warnbg);color:var(--warn)}
+  .badge.crit{background:var(--critbg);color:var(--crit)}.badge.info{background:var(--infobg);color:var(--s1)}.badge.neutral{background:var(--surface2);color:var(--muted)}
+  .cat{font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .cat.EFFICIENCY{color:var(--s2)}.cat.DEMAND_RESPONSE{color:var(--s6)}.cat.EV{color:var(--s1)}.cat.RENEWABLE{color:var(--s5)}.cat.ASSISTANCE{color:var(--s3)}
+  .field{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--hair)}
+  .field:last-child{border-bottom:none}.field .fl{font-weight:600}.field .fd{color:var(--faint);font-size:.83rem}
+  .switch{position:relative;width:44px;height:24px;flex:none;display:inline-block}
+  .switch input{opacity:0;width:0;height:0}
+  .switch .tk{position:absolute;inset:0;background:var(--baseline);border-radius:999px;transition:background .15s}
+  .switch .tb{position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px #0005}
+  .switch input:checked+.tk{background:var(--brand)}.switch input:checked+.tk+.tb{transform:translateX(20px)}
+  table.data{width:100%;border-collapse:collapse;font-size:.9rem}
+  table.data th{text-align:left;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--border);font-size:.8rem}
+  table.data td{padding:9px 10px;border-bottom:1px solid var(--hair);font-variant-numeric:tabular-nums}
+  table.data tr:last-child td{border-bottom:none}.num{text-align:right}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+  .tabs button{border:none;background:none;padding:10px 14px;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;white-space:nowrap}
+  .tabs button.active{color:var(--brand);border-bottom-color:var(--brand)}
+  .rec{display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:var(--radius);background:color-mix(in srgb,var(--good) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--good) 30%,var(--border))}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:var(--muted)}.legend .k{display:inline-flex;align-items:center;gap:6px}.legend .sw{width:12px;height:12px;border-radius:3px}
+  /* shell */
+  .app{display:grid;grid-template-columns:230px 1fr;grid-template-rows:56px 1fr;grid-template-areas:"side top" "side main";height:100vh}
+  .side{grid-area:side;background:var(--surface);border-right:1px solid var(--border);padding:14px 10px;overflow-y:auto}
+  .brand{display:flex;align-items:center;gap:10px;padding:6px 10px 16px;font-weight:750}
+  .brand .lg{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:var(--brand-ink);flex:none}
+  .nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);color:var(--muted);font-weight:560;margin-bottom:2px}
+  .nav a:hover{background:var(--surface2);text-decoration:none}
+  .nav a.active{background:color-mix(in srgb,var(--brand) 12%,transparent);color:var(--brand)}
+  .nav .ic{width:18px;text-align:center}
+  .top{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+  .main{grid-area:main;overflow-y:auto;padding:24px}.inner{max-width:1080px;margin:0 auto}
+  .sticky{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:14px 0 2px;display:flex;justify-content:flex-end;gap:10px;margin-top:12px}
+  .toasts{position:fixed;bottom:24px;right:24px;z-index:50;display:flex;flex-direction:column;gap:10px}
+  .toast{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--good);border-radius:var(--radius-sm);padding:12px 16px;box-shadow:var(--shadow);min-width:260px;animation:si .2s ease}
+  @keyframes si{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .banner{background:color-mix(in srgb,var(--s4) 16%,var(--surface));border-bottom:1px solid var(--border);text-align:center;font-size:.82rem;padding:6px;color:var(--ink)}
+  /* modal */
+  .backdrop{position:fixed;inset:0;background:#0007;display:grid;place-items:center;z-index:40;padding:20px}
+  .modal{background:var(--surface);border-radius:16px;max-width:640px;width:100%;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 20px 60px #0007}
+  /* login */
+  .login{min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,var(--brand),color-mix(in srgb,var(--brand) 55%,#0b3d5c))}
+  .lcard{background:var(--surface);border-radius:16px;padding:32px;width:100%;max-width:390px;box-shadow:0 20px 60px #0006}
+  .lcard input{width:100%;margin-top:4px}.lcard label{display:block;margin-top:12px;font-size:.85rem;font-weight:600}
+  .prog-card{display:flex;flex-direction:column;gap:8px;height:100%}
+  .prog-card .d{color:var(--muted);font-size:.88rem;flex:1}
+  .meta{display:flex;gap:14px;font-size:.82rem;color:var(--muted);flex-wrap:wrap}
+  @media(max-width:900px){
+    .app{grid-template-columns:1fr;grid-template-rows:56px 1fr auto;grid-template-areas:"top" "main" "side"}
+    .side{border-right:none;border-top:1px solid var(--border);display:flex;gap:4px;overflow-x:auto;padding:8px}
+    .brand{display:none}.nav{display:flex;gap:4px}.nav a{flex-direction:column;font-size:.68rem;padding:6px 9px;gap:3px}
+    .g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}.main{padding:16px}
+  }
+  @media(max-width:560px){.g4{grid-template-columns:1fr}}
+</style>
+
+<div id="root"></div>
+<div id="toasts" class="toasts"></div>
+<div id="modal"></div>
+
+<script>
+"use strict";
+//===================================================================================
+// SmartGrid Energy — single-file interactive demo. The rate + eligibility engines are
+// the SAME logic as the repo's frontend/src/services and cap/srv/lib — every dollar is
+// computed from usage, nothing hard-coded. In production this UI calls SAP CAP services
+// (see the repository); here it runs entirely in the browser.
+//===================================================================================
+
+//---- Mock data --------------------------------------------------------------------
+const RATES=[
+ {id:'R1',name:'Residential Standard R1',rateType:'TIERED',risk:'LOW',desc:'Tiered energy rate; price steps up above 600 kWh/mo.',
+  comp:[{t:'FIXED',p:12},{t:'TIER',from:0,to:600,p:.14},{t:'TIER',from:600,p:.18}],elig:[['customerType','EQ','RESIDENTIAL']]},
+ {id:'R-TOU',name:'Residential Time-of-Use',rateType:'TOU',risk:'MEDIUM',desc:'Lower overnight/midday, higher during the 4–9 PM peak.',
+  comp:[{t:'FIXED',p:13},{t:'TOU',tou:'PEAK',p:.26},{t:'TOU',tou:'OFFPEAK',p:.12},{t:'TOU',tou:'SUPER',p:.09}],elig:[['customerType','EQ','RESIDENTIAL'],['isSmartMeter','EQ',true]]},
+ {id:'RT-EV',name:'EV Time-of-Use',rateType:'TOU',risk:'MEDIUM',desc:'Deep overnight discounts for EV owners charging after 11 PM.',
+  comp:[{t:'FIXED',p:15},{t:'TOU',tou:'PEAK',p:.30},{t:'TOU',tou:'OFFPEAK',p:.13},{t:'TOU',tou:'SUPER',p:.06}],elig:[['customerType','EQ','RESIDENTIAL'],['isSmartMeter','EQ',true],['hasEV','EQ',true]]},
+ {id:'R-SEA',name:'Seasonal Flat',rateType:'SEASONAL',risk:'LOW',desc:'A flat energy price that changes by season.',
+  comp:[{t:'FIXED',p:11},{t:'ENERGY',season:'SUMMER',p:.19},{t:'ENERGY',season:'WINTER',p:.13}],elig:[['customerType','EQ','RESIDENTIAL']]},
+ {id:'GS-D',name:'Small Commercial Demand',rateType:'DEMAND',risk:'HIGH',desc:'Commercial rate with a demand charge on peak kW.',
+  comp:[{t:'FIXED',p:25},{t:'ENERGY',season:'ALL',p:.095},{t:'DEMAND',p:9.5}],elig:[['customerType','EQ','COMMERCIAL']]},
+];
+const rateById=id=>RATES.find(r=>r.id===id);
+
+const PROGRAMS=[
+ {id:'THERMO',name:'Smart Thermostat Demand Response',cat:'DEMAND_RESPONSE',short:'Small thermostat tweaks during peak events earn bill credits.',long:'During a handful of peak events each summer we briefly adjust your enrolled smart thermostat. Opt out of any event. Participants earn an annual bill credit.',incentive:'$75 credit + event credits',savings:'$40–$85 / yr',cap:5000,enrolled:3120,
+  elig:[['customerType','EQ','RESIDENTIAL','NOT','This program is for residential customers.'],['isSmartMeter','EQ',true,'NOT','An AMI meter is required.'],['hasSmartThermostat','EQ',true,'INFO','Add a compatible smart thermostat to qualify.']],info:[{k:'brand',l:'Thermostat brand'}]},
+ {id:'EVCHG',name:'EV Charger Rebate',cat:'EV',short:'Rebate toward a qualified Level 2 home charger.',long:'Install a qualified Level 2 charger and receive a rebate. Pairs well with the EV Time-of-Use rate.',incentive:'$500 rebate',savings:'Up to $500',cap:2000,enrolled:640,
+  elig:[['customerType','EQ','RESIDENTIAL','NOT','This program is for residential customers.'],['hasEV','EQ',true,'INFO','Register an EV to qualify.']],info:[{k:'model',l:'Charger make/model'}]},
+ {id:'AUDIT',name:'Home Energy Audit',cat:'EFFICIENCY',short:'A free professional assessment of where your home wastes energy.',long:'A certified advisor provides a prioritized list of efficiency improvements, many with their own rebates.',incentive:'Free ($150 value)',savings:'$100–$300 / yr',cap:10000,enrolled:4210,
+  elig:[['customerType','EQ','RESIDENTIAL','NOT','This program is for residential customers.']],info:[]},
+ {id:'CSOLAR',name:'Community Solar',cat:'RENEWABLE',short:'Subscribe to a local solar farm and get bill credits.',long:'No rooftop needed. Subscribe to a community array and receive credits based on its generation.',incentive:'Generation credits',savings:'$50–$120 / yr',cap:1500,enrolled:1490,
+  elig:[['serviceTerritory','IN',['NORTH','CENTRAL'],'NOT','No community array serves your territory.']],info:[]},
+ {id:'BUDGET',name:'Budget Billing',cat:'ASSISTANCE',short:'Even out seasonal bills into a predictable monthly amount.',long:'We average projected annual usage into equal monthly payments, then true-up periodically.',incentive:'No fee',savings:'Predictable payments',cap:100000,enrolled:22400,
+  elig:[['accountAgeMonths','GTE',12,'INFO','12 months of usage history is required.']],info:[]},
+ {id:'LIASST',name:'Low-Income Energy Assistance',cat:'ASSISTANCE',short:'Bill discounts and protections for income-qualified households.',long:'Income-qualified customers receive a monthly bill discount and payment protections.',incentive:'Up to 25% discount',savings:'Up to 25%',cap:100000,enrolled:15800,
+  elig:[['incomeQualified','EQ',true,'INFO','Income verification is required to enroll.']],info:[]},
+];
+const programById=id=>PROGRAMS.find(p=>p.id===id);
+
+const CUSTOMER={firstName:'Alex',lastName:'Johnson',bp:'0000100045',email:'alex.johnson@example.com',phone:'+1-555-0142',
+  customerType:'RESIDENTIAL',hasEV:true,hasSolar:false,hasBattery:false,hasSmartThermostat:true,incomeQualified:false,
+  accounts:[
+   {id:'1000456789',addr:'123 Green Street, Springfield',premise:'HOUSE',territory:'CENTRAL',zip:'62704',balance:142.75,nextPay:'2026-08-05',rate:'R1',isSmartMeter:true,meterType:'AMI',autoPay:true},
+   {id:'1000456790',addr:'48 Oak Avenue, Unit 2, Springfield',premise:'APT',territory:'NORTH',zip:'62702',balance:0,nextPay:'2026-08-12',rate:'R1',isSmartMeter:false,meterType:'AMR',autoPay:false},
+  ]};
+
+// 24 months of usage, split by TOU period (same seasonal shape as the repo).
+const BASE=[980,900,860,820,900,1180,1320,1360,1180,900,940,1010];
+function buildUsage(){const m=[];let y=2024,mo=7;for(let i=0;i<24;i++){const T=BASE[mo];const pk=Math.round(T*.3),of=Math.round(T*.45),su=T-pk-of;
+  m.push({ym:`${y}-${String(mo+1).padStart(2,'0')}`,total:T,peak:pk,off:of,super:su,demand:Math.round((T/720)*3.2*100)/100});
+  if(++mo>11){mo=0;y++}}return m}
+const USAGE=buildUsage();
+
+//---- Engine (authoritative) -------------------------------------------------------
+const SUMMER=new Set([6,7,8,9]);
+const isSummer=ym=>SUMMER.has(+ym.slice(5,7));
+function monthlyCost(rate,u){let c=0;const s=isSummer(u.ym);
+  for(const x of rate.comp){
+    if(x.t==='FIXED')c+=x.p;
+    else if(x.t==='ENERGY'){const ap=!x.season||x.season==='ALL'||(x.season==='SUMMER'&&s)||(x.season==='WINTER'&&!s);if(ap)c+=u.total*x.p}
+    else if(x.t==='TIER'){const f=x.from||0,t=x.to==null?Infinity:x.to;c+=Math.max(0,Math.min(u.total,t)-f)*x.p}
+    else if(x.t==='TOU'){c+=(x.tou==='PEAK'?u.peak:x.tou==='OFFPEAK'?u.off:u.super)*x.p}
+    else if(x.t==='DEMAND')c+=u.demand*x.p;
+  }return Math.round(c*100)/100}
+function breakdown(rate,months,elig){const mc=months.map(m=>monthlyCost(rate,m));const annual=Math.round(mc.reduce((a,b)=>a+b,0)*100)/100;
+  return{id:rate.id,name:rate.name,rateType:rate.rateType,risk:rate.risk,annual,avg:Math.round(annual/months.length*100)/100,eligible:elig}}
+const SEV={NOT:3,INFO:2,POT:1};
+function evalRule(r,a){const[attr,op,val]=r;const act=a[attr];if(act===undefined)return false;
+  if(op==='EQ')return act===val;if(op==='NE')return act!==val;if(op==='GTE')return typeof act==='number'&&act>=+val;
+  if(op==='LTE')return typeof act==='number'&&act<=+val;if(op==='IN')return Array.isArray(val)&&val.includes(act);return false}
+function evalElig(rules,a){let worst='NONE';const out=[];
+  for(const r of rules){const pass=evalRule(r,a);out.push({desc:ruleDesc(r),pass,reason:pass?null:r[4]});
+    if(!pass){const fo=r[3]||'NOT';if(worst==='NONE'||SEV[fo]>SEV[worst])worst=fo}}
+  const outcome=worst==='NONE'?'ELIGIBLE':worst==='NOT'?'NOT_ELIGIBLE':worst==='INFO'?'INFO_REQUIRED':'POTENTIALLY_ELIGIBLE';
+  return{outcome,rules:out}}
+function ruleDesc(r){const m={customerType:'Residential customer',isSmartMeter:'AMI (smart) meter',hasEV:'Registered EV',hasSmartThermostat:'Smart thermostat',serviceTerritory:'Service territory',accountAgeMonths:'12+ months of history',incomeQualified:'Income qualification'};return m[r[0]]||r[0]}
+function attrs(cust,acc){const annual=USAGE.reduce((a,m)=>a+m.total,0);
+  return{customerType:cust.customerType,serviceTerritory:acc.territory,isSmartMeter:acc.isSmartMeter,meterType:acc.meterType,
+    hasEV:cust.hasEV,hasSolar:cust.hasSolar,hasBattery:cust.hasBattery,hasSmartThermostat:cust.hasSmartThermostat,
+    incomeQualified:cust.incomeQualified,annualKwh:annual,accountAgeMonths:24}}
+function eligibleRateIds(cust,acc){const a=attrs(cust,acc);const s=new Set();for(const r of RATES)if(evalElig(r.elig,a).outcome==='ELIGIBLE')s.add(r.id);return s}
+const EVSPLIT={peak:.4,off:.4,super:.2};
+function applyScenario(months,sc,acc){return months.map(m=>{let pk=m.peak,of=m.off,su=m.super;const ev=sc.evKwh;
+  pk-=ev*EVSPLIT.peak;of-=ev*EVSPLIT.off;su-=ev*EVSPLIT.super;
+  if(sc.evWindow==='OVERNIGHT')su+=ev;else{pk+=ev*EVSPLIT.peak;of+=ev*EVSPLIT.off;su+=ev*EVSPLIT.super}
+  if(sc.thermostat){const sh=pk*.08;pk-=sh;of+=sh}
+  if(sc.peakShift>0){const sh=pk*(sc.peakShift/100);pk-=sh;of+=sh}
+  if(sc.solarKw>0)of-=Math.min(of,sc.solarKw*115);
+  if(sc.battery){const sh=Math.min(pk,150);pk-=sh;su+=sh}
+  const g=1+sc.growth/100;pk=Math.max(0,pk*g);of=Math.max(0,of*g);su=Math.max(0,su*g);
+  return{...m,peak:Math.round(pk),off:Math.round(of),super:Math.round(su),total:Math.round(pk+of+su),demand:Math.round((acc.isSmartMeter?pk/30/5:m.demand)*100)/100}})}
+function analyze(cust,acc,months){const cur=rateById(acc.rate);const elig=eligibleRateIds(cust,acc);
+  const current=breakdown(cur,months,true);
+  const alts=RATES.filter(r=>r.id!==cur.id).map(r=>{const b=breakdown(r,months,elig.has(r.id));const sv=Math.round((current.annual-b.annual)*100)/100;
+    return{...b,savings:sv,pct:current.annual>0?Math.round(sv/current.annual*1000)/10:0}}).sort((a,b)=>b.savings-a.savings);
+  const savers=alts.filter(a=>a.eligible&&a.savings>current.annual*.02);let rec=null;
+  if(savers.length){const best=savers[0],run=savers[1];let cf=months.length>=24?.9:.75;
+    if(run)cf+=Math.min(.08,(best.savings-run.savings)/Math.max(best.savings,1)*.1);
+    if(best.rateType==='TOU'||best.rateType==='DEMAND')cf=Math.min(cf,.9);cf=Math.round(Math.min(cf,.97)*100)/100;
+    const t=months.reduce((a,m)=>{a.total+=m.total;a.off+=m.off+m.super;return a},{total:0,off:0});
+    const share=t.total>0?Math.round(t.off/t.total*100):0;
+    let ex=`We recommend the ${best.name} because about ${share}% of your usage occurs during off-peak and overnight hours`;
+    if(cust.hasEV&&best.id.includes('EV'))ex+=`, and your registered EV can charge overnight at the lowest price`;
+    ex+=`. Estimated savings ≈ $${best.savings.toFixed(0)}/year (${best.pct}%). This is an estimate, not a guarantee.`;
+    rec={id:best.id,confidence:cf,explanation:ex}}
+  return{current,alts,rec,period:{from:months[0].ym,to:months[months.length-1].ym,months:months.length}}}
+
+//---- State ------------------------------------------------------------------------
+const DEFAULT_PREFS=()=>({communication:{email:true,sms:true,phone:false,push:true,postalMail:false,preferredChannel:'email'},
+  billing:{paperless:true,billReady:true,paymentConfirmation:true,paymentReminder:true,pastDue:true,autoPayNotification:true},
+  alerts:{highUsageAlert:true,dailyThresholdKwh:45,weeklyThresholdKwh:280,monthlyBillThreshold:200,projectedBillAlert:true,peakDemandAlert:false},
+  outage:{outageDetected:true,estimatedRestoration:true,crewDispatched:false,powerRestored:true,plannedOutage:true,channel:'sms'},
+  programs:{efficiencyOffers:true,demandResponseEvents:true,evPrograms:true,solarPrograms:false,renewableOffers:false,rebates:true,energyTips:true},
+  marketing:{productRecommendations:false,partnerOffers:false,energyProducts:false,researchParticipation:true},
+  privacy:{thirdPartyDataSharing:false,dataAnalytics:true,smartMeterData:true}});
+const clone=o=>JSON.parse(JSON.stringify(o));
+const state={
+  loggedIn:false,role:'CUSTOMER',view:'dashboard',acctId:'1000456789',
+  prefs:{'1000456789':DEFAULT_PREFS(),'1000456790':DEFAULT_PREFS()},
+  prefDraft:null,prefTab:'communication',
+  enrollments:[{id:'ENR-9001',pid:'AUDIT',status:'ENROLLED',at:'2026-05-10',hist:[['SUBMITTED','2026-05-10'],['UNDER_REVIEW','2026-05-11'],['ENROLLED','2026-05-12']]}],
+  audit:[],
+  ratePeriod:12,
+  scenario:{evWindow:'EVENING',evKwh:300,thermostat:false,peakShift:0,solarKw:0,battery:false,growth:0},
+  progFilter:'all',
+  notifs:[
+   {id:'N1',title:'You may save on the EV Time-of-Use rate',body:'Based on your last 12 months, switching could lower your annual cost.',sev:'good',read:false,at:'2026-07-19'},
+   {id:'N2',title:'Your July bill is ready',body:'AutoPay is scheduled for August 5.',sev:'info',read:false,at:'2026-07-18'},
+   {id:'N3',title:'Projected bill above your $200 threshold',body:'Warm weather is pushing your projected August bill higher.',sev:'warn',read:true,at:'2026-07-15'},
+  ],
+};
+const acct=()=>CUSTOMER.accounts.find(a=>a.id===state.acctId);
+const months=n=>USAGE.slice(-n);
+function pushAudit(entity,cat,prev,nv){state.audit.unshift({id:'A'+(state.audit.length+1),t:new Date().toLocaleTimeString(),entity,cat,prev:String(prev),nv:String(nv),role:state.role})}
+let auditSeq=0;
+
+//---- Helpers ----------------------------------------------------------------------
+const $=s=>document.querySelector(s);
+const money=n=>n.toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});
+const money2=n=>n.toLocaleString('en-US',{style:'currency',currency:'USD'});
+const kwh=n=>Math.round(n).toLocaleString('en-US')+' kWh';
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg,err){const el=document.createElement('div');el.className='toast'+(err?' err':'');el.style.borderLeftColor=err?'var(--crit)':'var(--good)';
+  el.innerHTML='<strong>'+(err?'⚠ ':'✓ ')+'</strong>'+esc(msg);$('#toasts').appendChild(el);setTimeout(()=>el.remove(),3200)}
+const RISK={LOW:['good','LOW risk'],MEDIUM:['warn','MED risk'],HIGH:['crit','HIGH risk']};
+const ELIG={ELIGIBLE:['good','Eligible'],POTENTIALLY_ELIGIBLE:['info','Potentially eligible'],INFO_REQUIRED:['warn','Info required'],NOT_ELIGIBLE:['crit','Not eligible']};
+function badge(kind,txt){return `<span class="badge ${kind}">${esc(txt)}</span>`}
+
+//---- Charts (inline SVG) ----------------------------------------------------------
+function niceMax(v){if(v<=0)return 1;const m=Math.pow(10,Math.floor(Math.log10(v)));const n=v/m;const s=n<=1?1:n<=2?2:n<=5?5:10;return s*m}
+function lineChart(data,unit){const w=640,h=200,pl=44,pr=16,pt=12,pb=26,iw=w-pl-pr,ih=h-pt-pb;const max=niceMax(Math.max(...data.map(d=>d.v)));
+  const x=i=>pl+(data.length===1?iw/2:i/(data.length-1)*iw);const y=v=>pt+ih-v/max*ih;
+  const path=data.map((d,i)=>(i?'L':'M')+x(i)+','+y(d.v)).join(' ');const ticks=[0,.5,1].map(f=>Math.round(max*f));
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img">${ticks.map(t=>`<line x1="${pl}" x2="${w-pr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--hair)"/><text x="${pl-8}" y="${y(t)+4}" text-anchor="end" font-size="11" fill="var(--faint)">${t.toLocaleString()}</text>`).join('')}
+    <path d="${path}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>
+    ${data.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d.v)}" r="3" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"><title>${esc(d.l)}: ${Math.round(d.v).toLocaleString()} ${unit||''}</title></circle>`).join('')}
+    ${data.map((d,i)=>i%2===0?`<text x="${x(i)}" y="${h-6}" text-anchor="middle" font-size="10" fill="var(--faint)">${esc(d.l)}</text>`:'').join('')}</svg>`}
+function hbars(data,hi){const max=niceMax(Math.max(...data.map(d=>d.v)));const cols=['var(--s1)','var(--s2)','var(--s3)','var(--s5)','var(--s6)'];
+  return `<div style="display:flex;flex-direction:column;gap:10px">${data.map((d,i)=>{const pct=d.v/max*100;const isHi=d.l===hi;
+    return `<div><div class="row between small" style="margin-bottom:3px"><span class="muted">${esc(d.l)}</span><span style="font-variant-numeric:tabular-nums;font-weight:600">$${Math.round(d.v).toLocaleString()}</span></div>
+    <div style="background:var(--hair);border-radius:6px;height:16px;overflow:hidden"><div style="width:${pct}%;height:100%;border-radius:6px;background:${isHi?'var(--s4)':cols[i%cols.length]}"></div></div></div>`}).join('')}</div>`}
+function donut(segs){const size=160,r=size/2-12,cx=size/2,cy=size/2,circ=2*Math.PI*r;let off=0;const total=segs.reduce((a,s)=>a+s.v,0)||1;
+  const arcs=segs.map(s=>{const frac=s.v/total,dash=frac*circ,el=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.c}" stroke-width="20" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-off}"/>`;off+=dash;return el}).join('');
+  return `<div class="row" style="gap:20px;flex-wrap:wrap"><svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}"><g transform="rotate(-90 ${cx} ${cy})">${arcs}</g><circle cx="${cx}" cy="${cy}" r="${r-14}" fill="var(--surface)"/></svg>
+    <div class="legend" style="flex-direction:column;gap:8px">${segs.map(s=>`<span class="k"><span class="sw" style="background:${s.c}"></span>${esc(s.l)} — ${Math.round(s.v/total*100)}%</span>`).join('')}</div></div>`}
+
+//---- Views ------------------------------------------------------------------------
+const NAV=[['dashboard','◧','Dashboard'],['preferences','⚙','Preferences'],['programs','◆','Programs'],['myprograms','★','My Programs'],['rates','▤','Rate Analyzer'],['simulator','⟳','Simulator'],['notifications','◔','Notifications'],['profile','◑','Profile']];
+
+function viewDashboard(){const a=acct(),r=rateById(a.rate),ms=months(12),an=analyze(CUSTOMER,a,ms);
+  const latest=ms[ms.length-1];const estBill=monthlyCost(r,latest);
+  const tot=ms.reduce((x,m)=>{x.peak+=m.peak;x.off+=m.off;x.su+=m.super;return x},{peak:0,off:0,su:0});
+  const rec=an.rec,recR=rec?an.alts.find(x=>x.id===rec.id):null;const unread=state.notifs.filter(n=>!n.read).length;
+  const recPrograms=['EVCHG','THERMO','AUDIT'].map(programById);
+  return `<div class="row between wrap" style="margin-bottom:8px"><div><h1>Good morning, ${CUSTOMER.firstName}</h1><p class="muted">${esc(a.addr)} · Account ${a.id}</p></div></div>
+  <div class="grid g4">
+    <div class="stat"><div class="l">Current balance</div><div class="v">${money2(a.balance)}</div><div class="s">${a.autoPay?'AutoPay on':'AutoPay off'}</div></div>
+    <div class="stat"><div class="l">Next payment</div><div class="v">${new Date(a.nextPay).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div><div class="s">Scheduled</div></div>
+    <div class="stat"><div class="l">Current rate</div><div class="v" style="font-size:1.1rem">${esc(r.name)}</div><div class="s">${r.rateType}</div></div>
+    <div class="stat"><div class="l">Est. this month</div><div class="v">${money(estBill)}</div><div class="s">${kwh(latest.total)} latest</div></div>
+  </div>
+  <div class="btn-row mt">
+    <button class="btn primary" data-nav="rates">Analyze My Rate</button>
+    <button class="btn" data-nav="preferences">Manage Preferences</button>
+    <button class="btn" data-nav="programs">Explore Programs</button>
+    <button class="btn" data-nav="simulator">Rate Simulator</button>
+    <button class="btn" data-act="pay">Pay Bill</button>
+    <button class="btn" data-act="outage">Report Outage</button>
+  </div>
+  ${rec&&recR?`<div class="card mt"><div class="rec"><div style="font-size:26px">💡</div><div style="flex:1"><strong>Savings opportunity:</strong> switching to ${esc(recR.name)} could save about <strong>${money(recR.savings)}/year</strong> (${recR.pct}%).<div class="small faint">Confidence ${Math.round(rec.confidence*100)}% · estimate, not a guarantee</div></div><button class="btn primary" data-nav="rates">See details</button></div></div>`:''}
+  <div class="grid g2 mt">
+    <div class="card"><div class="card-header"><h3>Monthly usage (12 mo)</h3><span class="chip" style="cursor:default">${kwh(ms.reduce((s,m)=>s+m.total,0))}/yr</span></div>${lineChart(ms.map(m=>({l:m.ym.slice(5),v:m.total})),'kWh')}</div>
+    <div class="card"><div class="card-header"><h3>Peak vs. off-peak</h3></div>${donut([{l:'Peak',v:tot.peak,c:'var(--s6)'},{l:'Off-peak',v:tot.off,c:'var(--s1)'},{l:'Super off-peak',v:tot.su,c:'var(--s5)'}])}</div>
+  </div>
+  <div class="grid g2 mt">
+    <div class="card"><div class="card-header"><h3>Recommended programs</h3><a data-nav="programs">View all</a></div>
+      ${recPrograms.map(p=>`<div class="field" data-prog="${p.id}" style="cursor:pointer"><div><div class="fl">${esc(p.name)}</div><div class="fd">${esc(p.short)}</div></div><span class="cat ${p.cat}">${p.cat.replace('_',' ')}</span></div>`).join('')}</div>
+    <div class="card"><div class="card-header"><h3>Alerts &amp; notifications</h3>${unread?badge('info',unread+' new'):''}</div>
+      ${state.notifs.slice(0,4).map(n=>`<div class="field" data-nav="notifications" style="cursor:pointer"><div><div class="fl">${esc(n.title)}</div><div class="fd">${esc(n.body)}</div></div>${badge(n.sev,n.sev)}</div>`).join('')}</div>
+  </div>`}
+
+const PREF_TABS=[['communication','Communication'],['billing','Billing'],['alerts','Usage Alerts'],['outage','Outage'],['programs','Program Comms'],['marketing','Marketing'],['privacy','Privacy']];
+const CH_LABEL={email:'Email',sms:'SMS',phone:'Phone',push:'Push notification',postalMail:'Postal mail',voice:'Voice'};
+function curPrefs(){return state.prefDraft||state.prefs[state.acctId]}
+function prefRow(section,key,label,desc){const v=curPrefs()[section][key];
+  return `<div class="field"><div><div class="fl">${esc(label)}</div>${desc?`<div class="fd">${esc(desc)}</div>`:''}</div><label class="switch"><input type="checkbox" ${v?'checked':''} data-pref="${section}.${key}"><span class="tk"></span><span class="tb"></span></label></div>`}
+function viewPreferences(){const p=curPrefs();const dirty=state.prefDraft&&JSON.stringify(state.prefDraft)!==JSON.stringify(state.prefs[state.acctId]);
+  let body='';const tab=state.prefTab;
+  if(tab==='communication'){body=['email','sms','phone','push','postalMail'].map(c=>prefRow('communication',c,CH_LABEL[c],'Receive communications by '+CH_LABEL[c].toLowerCase())).join('')
+    +`<div class="field"><div class="fl">Preferred channel</div><select data-prefsel="communication.preferredChannel">${['email','sms','phone','push','postalMail'].map(c=>`<option value="${c}" ${p.communication.preferredChannel===c?'selected':''}>${CH_LABEL[c]}</option>`).join('')}</select></div>`}
+  else if(tab==='billing')body=[['paperless','Paperless billing'],['billReady','Bill-ready notification'],['paymentConfirmation','Payment confirmation'],['paymentReminder','Payment reminder'],['pastDue','Past-due notification'],['autoPayNotification','AutoPay notification']].map(([k,l])=>prefRow('billing',k,l)).join('');
+  else if(tab==='alerts')body=prefRow('alerts','highUsageAlert','High energy usage alert','Alert me when usage spikes')
+    +numRow('alerts','dailyThresholdKwh','Daily usage threshold','Alert when a day exceeds this many kWh')
+    +numRow('alerts','weeklyThresholdKwh','Weekly usage threshold','Alert when a week exceeds this many kWh')
+    +numRow('alerts','monthlyBillThreshold','Monthly bill threshold','Notify me when my projected monthly bill exceeds this ($)')
+    +prefRow('alerts','projectedBillAlert','Projected bill alert')+prefRow('alerts','peakDemandAlert','Peak demand alert');
+  else if(tab==='outage')body=[['outageDetected','Outage detected'],['estimatedRestoration','Estimated restoration time'],['crewDispatched','Crew dispatched'],['powerRestored','Power restored'],['plannedOutage','Planned outage']].map(([k,l])=>prefRow('outage',k,l)).join('')
+    +`<div class="field"><div class="fl">Outage channel</div><select data-prefsel="outage.channel">${['sms','email','push','voice'].map(c=>`<option value="${c}" ${p.outage.channel===c?'selected':''}>${CH_LABEL[c]}</option>`).join('')}</select></div>`;
+  else if(tab==='programs')body=[['efficiencyOffers','Energy efficiency offers'],['demandResponseEvents','Demand response events'],['evPrograms','EV programs'],['solarPrograms','Solar programs'],['renewableOffers','Renewable energy offers'],['rebates','Rebates'],['energyTips','Energy-saving tips']].map(([k,l])=>prefRow('programs',k,l)).join('');
+  else if(tab==='marketing')body=[['productRecommendations','Product recommendations'],['partnerOffers','Utility partner offers'],['energyProducts','Energy products'],['researchParticipation','Research participation']].map(([k,l])=>prefRow('marketing',k,l)).join('');
+  else if(tab==='privacy')body=prefRow('privacy','thirdPartyDataSharing','Third-party data sharing','Allow sharing with approved partners')
+    +prefRow('privacy','dataAnalytics','Data analytics consent','Use my usage data to power recommendations')
+    +prefRow('privacy','smartMeterData','Smart meter data consent','Collect interval data from my smart meter');
+  return `<h1>Preference Center</h1><p class="muted">Choose how and when SmartGrid Energy contacts you. Changes are audited.</p>
+  <div class="tabs">${PREF_TABS.map(([k,l])=>`<button class="${tab===k?'active':''}" data-ptab="${k}">${l}</button>`).join('')}</div>
+  <div class="card">${body}
+    <div class="sticky">${dirty?'<span class="muted small" style="align-self:center">Unsaved changes</span>':''}<button class="btn" data-pref-discard ${dirty?'':'disabled'}>Discard</button><button class="btn primary" data-pref-save ${dirty?'':'disabled'}>Save Preferences</button></div>
+  </div>`}
+function numRow(section,key,label,desc){const v=curPrefs()[section][key];
+  return `<div class="field"><div><div class="fl">${esc(label)}</div>${desc?`<div class="fd">${esc(desc)}</div>`:''}</div><input type="number" value="${v}" data-prefnum="${section}.${key}" style="width:100px"></div>`}
+
+const PROG_FILTERS=[['all','All Programs'],['eligible','Eligible for Me'],['recommended','Recommended'],['enrolled','Enrolled'],['EFFICIENCY','Efficiency'],['EV','EV'],['RENEWABLE','Solar'],['DEMAND_RESPONSE','Demand Response'],['ASSISTANCE','Assistance']];
+function viewPrograms(){const a=acct(),at=attrs(CUSTOMER,a);const enrolledIds=new Set(state.enrollments.filter(e=>!['CANCELLED','REJECTED'].includes(e.status)).map(e=>e.pid));
+  const outcomes={};PROGRAMS.forEach(p=>outcomes[p.id]=evalElig(p.elig,at).outcome);
+  let list=PROGRAMS.filter(p=>{const f=state.progFilter;if(f==='all')return true;if(f==='eligible')return outcomes[p.id]==='ELIGIBLE';
+    if(f==='recommended')return outcomes[p.id]==='ELIGIBLE'&&['EVCHG','THERMO'].includes(p.id);if(f==='enrolled')return enrolledIds.has(p.id);return p.cat===f});
+  return `<h1>Energy Programs</h1><p class="muted">Discover programs you may qualify for. Eligibility is based on your account, meter, and usage.</p>
+  <div class="row wrap mt" style="gap:8px">${PROG_FILTERS.map(([k,l])=>`<button class="chip ${state.progFilter===k?'active':''}" data-pfilter="${k}">${l}</button>`).join('')}</div>
+  <div class="grid g3 mt">${list.map(p=>{const o=enrolledIds.has(p.id)?'ELIGIBLE':outcomes[p.id];const eb=ELIG[o];const cp=Math.round(p.enrolled/p.cap*100);
+    return `<div class="card prog-card"><div class="row between"><span class="cat ${p.cat}">${p.cat.replace('_',' ')}</span>${badge(eb[0],enrolledIds.has(p.id)?'Enrolled':eb[1])}</div>
+    <h3 style="margin:0">${esc(p.name)}</h3><div class="d">${esc(p.short)}</div>
+    <div class="meta"><span>💲 ${esc(p.incentive)}</span><span>📉 ${esc(p.savings)}</span></div>
+    <div class="small faint">${cp>=95?'Nearly full':cp+'% full'}</div>
+    <div class="btn-row"><button class="btn" data-prog="${p.id}">Learn More</button><button class="btn primary" data-prog="${p.id}" ${o==='NOT_ELIGIBLE'&&!enrolledIds.has(p.id)?'disabled':''}>${enrolledIds.has(p.id)?'View':'Check & Enroll'}</button></div></div>`}).join('')||'<div class="card muted">No programs match this filter.</div>'}</div>`}
+
+function openProgram(pid){const p=programById(pid),a=acct(),at=attrs(CUSTOMER,a);const res=evalElig(p.elig,at);
+  const enrolled=state.enrollments.find(e=>e.pid===pid&&!['CANCELLED','REJECTED'].includes(e.status));
+  const canEnroll=(res.outcome==='ELIGIBLE'||res.outcome==='POTENTIALLY_ELIGIBLE')&&!enrolled;
+  const eb=ELIG[res.outcome];
+  $('#modal').innerHTML=`<div class="backdrop"><div class="modal">
+    <div class="row between"><span class="cat ${p.cat}">${p.cat.replace('_',' ')}</span><button class="btn ghost small" data-close>✕</button></div>
+    <h2 style="margin:6px 0">${esc(p.name)}</h2>
+    <p class="muted">${esc(p.long)}</p>
+    <div class="grid g2 mt-s"><div><div class="small faint">Incentive</div><div style="font-weight:600">${esc(p.incentive)}</div></div><div><div class="small faint">Estimated savings</div><div style="font-weight:600">${esc(p.savings)}</div></div></div>
+    <h3 class="mt">Your eligibility ${badge(eb[0],eb[1])}</h3>
+    ${res.rules.map(r=>`<div class="field"><div><div class="fl">${r.pass?'✓':'✗'} ${esc(r.desc)}</div>${!r.pass&&r.reason?`<div class="fd">${esc(r.reason)}</div>`:''}</div><span style="color:${r.pass?'var(--good)':'var(--crit)'};font-weight:600">${r.pass?'Met':'Not met'}</span></div>`).join('')}
+    <div class="btn-row mt">${enrolled?badge('good','Already enrolled ('+enrolled.status.replace('_',' ')+')'):`<button class="btn primary" data-enroll="${p.id}" ${canEnroll?'':'disabled'}>Enroll Now</button>`}
+      ${res.outcome==='INFO_REQUIRED'?'<span class="small muted" style="align-self:center">Additional information needed to enroll.</span>':''}
+      ${res.outcome==='NOT_ELIGIBLE'?'<span class="small muted" style="align-self:center">Not available for your account.</span>':''}</div>
+  </div></div>`}
+
+function enroll(pid){const p=programById(pid);const now=new Date().toISOString().slice(0,10);
+  state.enrollments.unshift({id:'ENR-'+Math.floor(Math.random()*90000+10000),pid,status:'SUBMITTED',at:now,hist:[['SUBMITTED',now]]});
+  pushAudit('ProgramEnrollment',pid,'','SUBMITTED');$('#modal').innerHTML='';toast('Enrollment submitted — track it in My Programs.');
+  // simulate async status advance
+  const id=state.enrollments[0].id;setTimeout(()=>{const e=state.enrollments.find(x=>x.id===id);if(e&&e.status==='SUBMITTED'){e.status='UNDER_REVIEW';e.hist.push(['UNDER_REVIEW',new Date().toISOString().slice(0,10)]);if(state.view==='myprograms')render()}},3500);
+  state.view='myprograms';render()}
+
+const ESTATUS={DRAFT:'neutral',SUBMITTED:'info',UNDER_REVIEW:'info',INFO_REQUIRED:'warn',APPROVED:'good',ENROLLED:'good',REJECTED:'crit',CANCELLED:'neutral'};
+function viewMyPrograms(){if(!state.enrollments.length)return `<h1>My Programs</h1><div class="card muted">No enrollments yet. <a data-nav="programs">Explore programs →</a></div>`;
+  return `<h1>My Programs</h1><p class="muted">Track the status of your program enrollments.</p>
+  ${state.enrollments.map(e=>{const p=programById(e.pid);const canCancel=!['ENROLLED','CANCELLED','REJECTED'].includes(e.status);
+    return `<div class="card mt"><div class="row between wrap"><div><h3 style="margin:0">${esc(p?p.name:e.pid)}</h3><div class="muted small">Ref ${e.id} · submitted ${e.at}</div></div>${badge(ESTATUS[e.status],e.status.replace('_',' '))}</div>
+    <div class="mt-s" style="display:flex;gap:6px;flex-wrap:wrap">${e.hist.map(h=>`<span class="chip small" style="cursor:default">${h[0].replace('_',' ')} · ${h[1]}</span>`).join('')}</div>
+    ${canCancel?`<div class="btn-row mt"><button class="btn ghost small" data-cancel="${e.id}">Cancel enrollment</button></div>`:''}</div>`}).join('')}`}
+
+function viewRates(){const a=acct(),an=analyze(CUSTOMER,a,months(state.ratePeriod));const rec=an.rec,recR=rec?an.alts.find(x=>x.id===rec.id):null;
+  const chart=[{l:an.current.name+' (current)',v:an.current.annual}].concat(an.alts.map(x=>({l:x.name,v:x.annual})));
+  return `<div class="row between wrap"><div><h1>Rate Analyzer</h1><p class="muted">See how every eligible rate would price your actual usage.</p></div>
+    <div class="row" style="gap:8px"><span class="muted small">Period</span><select data-period>${[12,24].map(m=>`<option value="${m}" ${state.ratePeriod===m?'selected':''}>Last ${m} months</option>`).join('')}</select></div></div>
+  ${rec&&recR?`<div class="card mt"><div class="rec"><div style="font-size:24px">★</div><div style="flex:1"><div class="row wrap" style="gap:8px"><strong>Recommended: ${esc(recR.name)}</strong>${badge('good','Save '+money(recR.savings)+'/yr')}${badge('info','Confidence '+Math.round(rec.confidence*100)+'%')}</div><p class="small" style="margin:6px 0 0">${esc(rec.explanation)}</p></div></div></div>`
+    :'<div class="card mt"><p class="muted">Your current rate looks like a good fit — no eligible alternative saves more than 2%.</p></div>'}
+  <div class="grid g2 mt">
+    <div class="card"><h3>Estimated annual cost by rate</h3><div class="mt-s">${hbars(chart,recR?recR.name:null)}</div></div>
+    <div class="card"><h3>Current rate</h3><div class="l muted">${esc(an.current.name)}</div><div style="font-size:1.55rem;font-weight:700;font-variant-numeric:tabular-nums">${money(an.current.annual)}<span class="muted small"> /yr</span></div><div class="s faint">${money(an.current.avg)}/mo avg · ${an.period.from} → ${an.period.to}</div><div class="mt-s">${badge(RISK[an.current.risk][0],RISK[an.current.risk][1])}</div></div>
+  </div>
+  <div class="card mt"><h3>Rate comparison</h3><div style="overflow-x:auto"><table class="data"><thead><tr><th>Rate</th><th class="num">Annual</th><th class="num">Monthly</th><th class="num">Savings</th><th class="num">%</th><th>Eligibility</th><th>Risk</th><th></th></tr></thead><tbody>
+    <tr><td><strong>${esc(an.current.name)}</strong> <span class="muted small">(current)</span></td><td class="num">${money(an.current.annual)}</td><td class="num">${money(an.current.avg)}</td><td class="num">—</td><td class="num">—</td><td>${badge('neutral','Current')}</td><td>${badge(RISK[an.current.risk][0],RISK[an.current.risk][1])}</td><td></td></tr>
+    ${an.alts.map(x=>`<tr><td>${esc(x.name)}</td><td class="num">${money(x.annual)}</td><td class="num">${money(x.avg)}</td><td class="num" style="color:${x.savings>0?'var(--good)':'var(--faint)'}">${x.savings>0?'+'+money(x.savings):money(x.savings)}</td><td class="num">${x.pct}%</td><td>${x.eligible?badge('good','Eligible'):badge('crit','Not eligible')}</td><td>${badge(RISK[x.risk][0],RISK[x.risk][1])}</td><td class="num">${x.eligible&&x.savings>0?`<button class="btn ghost small" data-switch="${x.id}">Request switch</button>`:''}</td></tr>`).join('')}
+  </tbody></table></div><p class="muted small mt-s">Estimates are based on historical usage and are not a guarantee of future bills. TOU and demand rates carry more variability.</p></div>
+  <div class="btn-row mt"><button class="btn primary" data-nav="simulator">Try the "What if?" simulator →</button></div>`}
+
+function viewSimulator(){const a=acct(),sc=state.scenario,an=analyze(CUSTOMER,a,applyScenario(months(12),sc,a));
+  const rec=an.rec,best=rec?an.alts.find(x=>x.id===rec.id):null;
+  const chart=[{l:an.current.name+' (current)',v:an.current.annual}].concat(an.alts.map(x=>({l:x.name,v:x.annual})));
+  return `<h1>Rate Simulator</h1><p class="muted">Adjust your habits and watch every rate recalculate in real time.</p>
+  <div class="btn-row mt"><button class="btn" data-preset="ev">What if I charge my EV after 11 PM?</button><button class="btn" data-preset="solar">What if I add 5 kW of solar?</button><button class="btn ghost" data-preset="reset">Reset</button></div>
+  <div class="grid g2 mt"><div class="card"><h3>Your scenario</h3>
+    <div class="field"><div class="fl">EV charging window</div><select data-sc="evWindow"><option value="EVENING" ${sc.evWindow==='EVENING'?'selected':''}>Evening (mixed)</option><option value="OVERNIGHT" ${sc.evWindow==='OVERNIGHT'?'selected':''}>Overnight (after 11 PM)</option></select></div>
+    ${slider('evKwh','EV charging',sc.evKwh+' kWh/mo',0,800,25)}
+    <div class="field"><div class="fl">Thermostat setback</div><label class="switch"><input type="checkbox" ${sc.thermostat?'checked':''} data-scb="thermostat"><span class="tk"></span><span class="tb"></span></label></div>
+    ${slider('peakShift','Shift peak usage',sc.peakShift+'%',0,50,5)}
+    ${slider('solarKw','Solar',sc.solarKw+' kW',0,12,1)}
+    <div class="field"><div class="fl">Home battery</div><label class="switch"><input type="checkbox" ${sc.battery?'checked':''} data-scb="battery"><span class="tk"></span><span class="tb"></span></label></div>
+    ${slider('growth','Future usage change',(sc.growth>0?'+':'')+sc.growth+'%',-30,50,5)}
+  </div>
+  <div><div class="card"><h3>Results</h3>${best?`<div class="rec" style="margin-bottom:12px"><div style="font-size:22px">💡</div><div><strong>Best plan: ${esc(best.name)}</strong><div class="small">Saves ${money(best.savings)}/yr (${best.pct}%) vs. your current rate</div></div></div>`:'<p class="muted">In this scenario, your current rate is still the cheapest eligible option.</p>'}
+    <div class="grid g2"><div class="stat" style="box-shadow:none"><div class="l">Current rate cost</div><div class="v">${money(an.current.annual)}</div><div class="s">per year</div></div><div class="stat" style="box-shadow:none"><div class="l">Best alternative</div><div class="v">${best?money(best.annual):'—'}</div><div class="s">${best?money(best.savings)+'/yr saved':'no savings'}</div></div></div></div>
+    <div class="card mt"><h3>Annual cost by rate (this scenario)</h3><div class="mt-s">${hbars(chart,best?best.name:null)}</div></div>
+  </div></div>`}
+function slider(key,label,val,min,max,step){return `<div class="field"><div><div class="fl">${label}: ${val}</div></div><input type="range" min="${min}" max="${max}" step="${step}" value="${state.scenario[key]}" data-scr="${key}" style="width:160px"></div>`}
+
+function viewNotifications(){return `<h1>Notifications</h1><p class="muted">Alerts and messages, honoring your communication preferences.</p>
+  ${state.notifs.map(n=>`<div class="card mt"><div class="row between wrap" style="align-items:flex-start"><div style="flex:1"><div class="row" style="gap:8px">${!n.read?'<span style="width:8px;height:8px;border-radius:50%;background:var(--s1)"></span>':''}<strong>${esc(n.title)}</strong>${badge(n.sev,n.sev)}</div><p class="small muted" style="margin:4px 0 0">${esc(n.body)}</p><div class="small faint mt-s">${n.at}</div></div>${!n.read?`<button class="btn ghost small" data-read="${n.id}">Mark read</button>`:''}</div></div>`).join('')}`}
+
+function viewProfile(){const a=acct();
+  return `<h1>Profile</h1><div class="grid g2 mt">
+  <div class="card"><h3>Contact details</h3>
+    <div class="field"><div class="fl">Name</div><div>${CUSTOMER.firstName} ${CUSTOMER.lastName}</div></div>
+    <div class="field"><div class="fl">Email</div><div>${esc(CUSTOMER.email)}</div></div>
+    <div class="field"><div class="fl">Phone</div><div>${esc(CUSTOMER.phone)}</div></div>
+    <div class="field"><div class="fl">Customer type</div><div>${CUSTOMER.customerType}</div></div>
+    <div class="field"><div class="fl">Business Partner</div><div>${CUSTOMER.bp}</div></div>
+    <div class="row wrap mt-s" style="gap:6px">${CUSTOMER.hasEV?badge('info','EV'):''}${CUSTOMER.hasSmartThermostat?badge('info','Smart thermostat'):''}${CUSTOMER.hasSolar?badge('good','Solar'):''}</div></div>
+  <div class="card"><h3>Accounts &amp; premises</h3>${CUSTOMER.accounts.map(x=>`<div class="field"><div><div class="fl">${esc(x.addr)}</div><div class="fd">Account ${x.id} · ${rateById(x.rate).name} · ${x.meterType} meter</div></div>${badge(x.isSmartMeter?'good':'neutral',x.isSmartMeter?'Smart meter':'Standard')}</div>`).join('')}</div>
+  </div>
+  <div class="card mt"><h3>Preference change history (audit log)</h3><p class="muted small">Every preference/consent change is recorded with old/new value, source, and user — the audit trail the production portal writes.</p>
+  ${!state.audit.length?'<p class="muted">No changes recorded yet. Change a preference and save.</p>':`<div style="overflow-x:auto"><table class="data"><thead><tr><th>When</th><th>Entity</th><th>Category</th><th>Previous</th><th>New</th><th>Role</th></tr></thead><tbody>${state.audit.map(e=>`<tr><td>${e.t}</td><td>${e.entity}</td><td>${esc(e.cat)}</td><td class="muted">${esc(e.prev)}</td><td><strong>${esc(e.nv)}</strong></td><td>${badge('neutral',e.role)}</td></tr>`).join('')}</tbody></table></div>`}</div>
+  ${a?'':''}`}
+
+//---- Render -----------------------------------------------------------------------
+function render(){
+  if(!state.loggedIn){renderLogin();return}
+  const views={dashboard:viewDashboard,preferences:viewPreferences,programs:viewPrograms,myprograms:viewMyPrograms,rates:viewRates,simulator:viewSimulator,notifications:viewNotifications,profile:viewProfile};
+  const a=acct();
+  $('#root').innerHTML=`<div class="app">
+    <aside class="side"><div class="brand"><span class="lg">⚡</span><span>SmartGrid</span></div>
+      <nav class="nav">${NAV.map(([v,ic,l])=>`<a class="${state.view===v?'active':''}" data-nav="${v}"><span class="ic">${ic}</span><span>${l}</span></a>`).join('')}</nav></aside>
+    <header class="top"><div class="row" style="gap:8px"><span class="muted small">Account</span>
+      <select data-acct>${CUSTOMER.accounts.map(x=>`<option value="${x.id}" ${x.id===state.acctId?'selected':''}>${esc(x.addr)} · ${x.id}</option>`).join('')}</select></div>
+      <div class="spacer"></div><button class="btn ghost" data-nav="notifications">🔔</button>
+      <span class="small" style="font-weight:600">${CUSTOMER.firstName} ${CUSTOMER.lastName}</span>
+      <button class="btn ghost small" data-logout>Sign out</button></header>
+    <main class="main"><div class="inner">${(views[state.view]||viewDashboard)()}</div></main>
+  </div>`;
+}
+function renderLogin(){$('#root').innerHTML=`<div class="login"><div class="lcard">
+  <div class="brand" style="padding:0;margin-bottom:20px"><span class="lg">⚡</span><span>SmartGrid Energy</span></div>
+  <h1 style="font-size:1.25rem">Sign in to your account</h1><p class="muted small">Manage preferences, explore programs, and analyze your rate.</p>
+  <label>Email<input type="email" value="alex.johnson@example.com" id="lu"></label>
+  <label>Password<input type="password" value="demo" id="lp"></label>
+  <button class="btn primary" style="width:100%;margin-top:16px" data-login>Sign in</button>
+  <p class="muted small" style="margin-top:16px;text-align:center">Live demo · no real authentication · fictional utility brand</p>
+</div></div>`}
+
+//---- Events (delegation) ----------------------------------------------------------
+document.addEventListener('click',e=>{
+  // Close the modal when the backdrop itself (not its contents) is clicked.
+  if(e.target.classList&&e.target.classList.contains('backdrop')){$('#modal').innerHTML='';return}
+  const t=e.target.closest('[data-login],[data-logout],[data-nav],[data-prog],[data-ptab],[data-pfilter],[data-close],[data-enroll],[data-cancel],[data-read],[data-preset],[data-switch],[data-pref-save],[data-pref-discard],[data-act]');
+  if(!t)return;
+  if(t.dataset.login!==undefined){state.loggedIn=true;state.view='dashboard';render();return}
+  if(t.dataset.logout!==undefined){state.loggedIn=false;state.prefDraft=null;render();return}
+  if(t.dataset.nav){state.view=t.dataset.nav;state.prefDraft=null;render();return}
+  if(t.dataset.prog){openProgram(t.dataset.prog);return}
+  if(t.dataset.ptab){state.prefTab=t.dataset.ptab;render();return}
+  if(t.dataset.pfilter){state.progFilter=t.dataset.pfilter;render();return}
+  if(t.dataset.close!==undefined){$('#modal').innerHTML='';return}
+  if(t.dataset.enroll){enroll(t.dataset.enroll);return}
+  if(t.dataset.cancel){const en=state.enrollments.find(x=>x.id===t.dataset.cancel);if(en){en.status='CANCELLED';en.hist.push(['CANCELLED',new Date().toISOString().slice(0,10)]);toast('Enrollment cancelled.');render()}return}
+  if(t.dataset.read){const n=state.notifs.find(x=>x.id===t.dataset.read);if(n){n.read=true;render()}return}
+  if(t.dataset.switch){toast('Rate change request submitted for review.');t.outerHTML=badge('info','Requested');return}
+  if(t.dataset.act){toast(t.dataset.act==='pay'?'Payment is handled by the existing payment provider (out of scope for the demo).':'Outage reporting links to the Outage Management System (out of scope for the demo).');return}
+  if(t.dataset.preset){const s=state.scenario;if(t.dataset.preset==='ev')s.evWindow='OVERNIGHT';else if(t.dataset.preset==='solar'){Object.assign(state.scenario,{evWindow:'EVENING',evKwh:300,thermostat:false,peakShift:0,solarKw:5,battery:false,growth:0})}else Object.assign(state.scenario,{evWindow:'EVENING',evKwh:300,thermostat:false,peakShift:0,solarKw:0,battery:false,growth:0});render();return}
+  if(t.dataset.prefSave!==undefined){savePrefs();return}
+  if(t.dataset.prefDiscard!==undefined){state.prefDraft=null;render();return}
+});
+document.addEventListener('change',e=>{
+  const t=e.target;
+  if(t.dataset.acct){state.acctId=t.value;state.prefDraft=null;render();return}
+  if(t.dataset.period){state.ratePeriod=+t.value;render();return}
+  if(t.dataset.pref){ensureDraft();const[s,k]=t.dataset.pref.split('.');state.prefDraft[s][k]=t.checked;render();return}
+  if(t.dataset.prefsel){ensureDraft();const[s,k]=t.dataset.prefsel.split('.');state.prefDraft[s][k]=t.value;render();return}
+  if(t.dataset.prefnum){ensureDraft();const[s,k]=t.dataset.prefnum.split('.');state.prefDraft[s][k]=+t.value;render();return}
+  if(t.dataset.sc){state.scenario[t.dataset.sc]=t.value;render();return}
+  if(t.dataset.scb){state.scenario[t.dataset.scb]=t.checked;render();return}
+  // Sliders update on release (change), not on every input tick, so re-rendering the
+  // view never detaches the slider mid-drag.
+  if(t.dataset.scr){state.scenario[t.dataset.scr]=+t.value;render();return}
+});
+function ensureDraft(){if(!state.prefDraft)state.prefDraft=clone(state.prefs[state.acctId])}
+function savePrefs(){if(!state.prefDraft)return;const base=state.prefs[state.acctId];let n=0;
+  for(const s of Object.keys(state.prefDraft))for(const k of Object.keys(state.prefDraft[s])){const nv=state.prefDraft[s][k],ov=base[s][k];if(nv!==ov){pushAudit('CustomerPreference',s+'.'+k,ov,nv);n++}}
+  state.prefs[state.acctId]=clone(state.prefDraft);state.prefDraft=null;toast('Preferences saved ('+n+' change'+(n===1?'':'s')+').');render()}
+
+render();
+</script>
