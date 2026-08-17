@@ -1,0 +1,339 @@
+<title>CPC Architecture Diagrams</title>
+<style>
+  :root{
+    --paper:#f4f5f4;--surface:#ffffff;--ink:#16211d;--muted:#5b6a64;--hair:#dfe3e0;
+    --acc:#0a6e5c;         /* the decision hop: BRFplus / preference resolution */
+    --acc2:#b8791a;        /* compliance path: DNC */
+  }
+  @media(prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --paper:#0e1311;--surface:#171e1b;--ink:#edf2ef;--muted:#9fb0a8;--hair:#2a332e;
+    --acc:#3ec2a4;--acc2:#d9a03c;
+  }}
+  :root[data-theme="dark"]{--paper:#0e1311;--surface:#171e1b;--ink:#edf2ef;--muted:#9fb0a8;--hair:#2a332e;--acc:#3ec2a4;--acc2:#d9a03c}
+  :root[data-theme="light"]{--paper:#f4f5f4;--surface:#ffffff;--ink:#16211d;--muted:#5b6a64;--hair:#dfe3e0;--acc:#0a6e5c;--acc2:#b8791a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;font-size:15px}
+  .wrap{max-width:1020px;margin:0 auto;padding:32px 20px 60px}
+  h1{font-size:1.6rem;letter-spacing:-.01em;margin:0 0 6px}
+  .lede{color:var(--muted);max-width:70ch;margin:0 0 8px}
+  h2{font-size:1.05rem;margin:0}
+  figure{margin:34px 0 0;background:var(--surface);border:1px solid var(--hair);
+    border-radius:14px;padding:22px 22px 14px;overflow-x:auto}
+  figcaption{color:var(--muted);font-size:.88rem;margin-top:10px;max-width:80ch}
+  figcaption b{color:var(--ink)}
+  svg{max-width:100%;height:auto;display:block}
+  .legend{display:flex;gap:22px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin-top:26px}
+  .legend span{display:inline-flex;align-items:center;gap:8px}
+  .k{display:inline-block;width:30px;height:0;border-top:2px solid currentColor}
+  .k.d{border-top-style:dashed}
+  .k.a{border-top-color:var(--acc)}
+  .k.c{border-top-color:var(--acc2)}
+</style>
+
+<div class="wrap">
+  <h1>Customer Preference Center — Architecture &amp; Interaction Diagrams</h1>
+  <p class="lede">How the systems and data interact in Option A: front ends on Service Cloud V2 and the
+  customer portal, integration through SAP BTP, storage and decisions in S/4HANA (tables + BRFplus),
+  and outbound communication that honors the stored preferences. Companion to
+  <em>cpc-solution-package.md</em> and the IF_CPC_02/06/07 mapping specs.</p>
+  <div class="legend">
+    <span><span class="k"></span> synchronous call (labeled with what flows)</span>
+    <span><span class="k d"></span> asynchronous event / queue</span>
+    <span><span class="k a"></span> preference decision (BRFplus)</span>
+    <span><span class="k c"></span> DNC compliance path</span>
+  </div>
+
+  <!-- ============================ FIGURE 1 : LANDSCAPE ============================ -->
+  <figure>
+    <h2>1 · System landscape — who talks to whom, and where the data lives</h2>
+    <svg viewBox="0 0 980 560" role="img"
+         aria-label="System landscape: Service Cloud V2 and the customer portal embed the CPC UI, which calls S/4HANA through BTP API Management and Integration Suite. Preference data lives only in S/4 tables; BRFplus holds the rules. Events flow out through Event Mesh to downstream systems and channel providers.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="inherit">
+
+        <!-- Front ends -->
+        <rect x="20" y="40" width="180" height="86" rx="9"/>
+        <text x="110" y="66" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">Service Cloud V2</text>
+        <text x="110" y="84" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">Case screen (CSR)</text>
+        <text x="110" y="102" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">URL mashup</text>
+
+        <rect x="20" y="170" width="180" height="70" rx="9"/>
+        <text x="110" y="198" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">Customer Portal</text>
+        <text x="110" y="216" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">self-service (svgbs.com)</text>
+
+        <!-- BTP container -->
+        <rect x="260" y="20" width="220" height="420" rx="12" stroke-dasharray="4 4" opacity=".55"/>
+        <text x="370" y="42" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".62" letter-spacing=".08em">SAP BTP</text>
+
+        <rect x="280" y="56" width="180" height="58" rx="9"/>
+        <text x="370" y="80" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">CPC UI</text>
+        <text x="370" y="98" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">one app · csr + customer</text>
+
+        <rect x="280" y="146" width="180" height="52" rx="9"/>
+        <text x="370" y="168" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">API Management</text>
+        <text x="370" y="186" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">OAuth · quota · errors</text>
+
+        <rect x="280" y="228" width="180" height="52" rx="9"/>
+        <text x="370" y="250" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">Integration Suite</text>
+        <text x="370" y="268" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">iFlows IF_CPC_01…08</text>
+
+        <rect x="280" y="330" width="180" height="52" rx="9"/>
+        <text x="370" y="352" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">Event Mesh</text>
+        <text x="370" y="370" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">zcpc/* topics + DLQs</text>
+
+        <!-- S/4 container -->
+        <rect x="540" y="20" width="230" height="420" rx="12" stroke-dasharray="4 4" opacity=".55"/>
+        <text x="655" y="42" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".62" letter-spacing=".08em">SAP S/4HANA UTILITIES</text>
+
+        <rect x="560" y="56" width="190" height="52" rx="9"/>
+        <text x="655" y="78" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">ZUI_CPC_PREF</text>
+        <text x="655" y="96" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">RAP OData V4 · actions</text>
+
+        <rect x="560" y="140" width="190" height="56" rx="9" stroke="var(--acc)" stroke-width="2"/>
+        <text x="655" y="163" text-anchor="middle" font-size="13" font-weight="650" fill="var(--acc)" stroke="none">BRFplus ZCPC</text>
+        <text x="655" y="181" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">validate · resolve · auto-process</text>
+
+        <!-- data cylinder -->
+        <path d="M580 238 a75 12 0 0 1 150 0 v52 a75 12 0 0 1 -150 0 z"/>
+        <path d="M580 238 a75 12 0 0 0 150 0" />
+        <text x="655" y="272" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">ZCPC_PREF · AUDIT</text>
+        <text x="655" y="289" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">+ PREFTYPE · CDS views</text>
+
+        <rect x="560" y="330" width="190" height="52" rx="9"/>
+        <text x="655" y="352" text-anchor="middle" font-size="13" font-weight="650" fill="currentColor" stroke="none">Enhancements</text>
+        <text x="655" y="370" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">move-in/out · BP change</text>
+
+        <!-- Downstream -->
+        <rect x="830" y="56" width="130" height="70" rx="9"/>
+        <text x="895" y="80" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Providers</text>
+        <text x="895" y="98" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">email · SMS</text>
+        <text x="895" y="113" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">voice · print</text>
+
+        <rect x="830" y="170" width="130" height="70" rx="9" stroke="var(--acc2)" stroke-width="1.8"/>
+        <text x="895" y="194" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc2)" stroke="none">Dialer /</text>
+        <text x="895" y="210" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc2)" stroke="none">Campaign</text>
+        <text x="895" y="227" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">DNC lists</text>
+
+        <rect x="830" y="284" width="130" height="70" rx="9"/>
+        <text x="895" y="308" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">OMS · DRMS</text>
+        <text x="895" y="325" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Marketing</text>
+        <text x="895" y="342" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">pref sync</text>
+
+        <!-- arrows -->
+        <line x1="200" y1="83" x2="280" y2="83" marker-end="url(#ar)"/>
+        <text x="240" y="74" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">iframe + bp/ca/agent</text>
+        <path d="M200 205 h30 q14 0 14 -14 v-80 q0 -14 14 -14 h22" marker-end="url(#ar)"/>
+        <text x="240" y="222" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">same app, customer mode</text>
+
+        <line x1="370" y1="114" x2="370" y2="146" marker-end="url(#ar)"/>
+        <text x="378" y="134" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">saveChanges JSON (OAuth)</text>
+        <line x1="370" y1="198" x2="370" y2="228" marker-end="url(#ar)"/>
+
+        <line x1="460" y1="254" x2="560" y2="90" marker-end="url(#ar)" opacity=".0"/>
+        <path d="M460 246 h40 q16 0 16 -16 v-132 q0 -16 16 -16 h28" marker-end="url(#ar)"/>
+        <text x="505" y="238" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">OData V4</text>
+
+        <line x1="655" y1="108" x2="655" y2="140" stroke="var(--acc)" stroke-width="1.8" marker-end="url(#arA)"/>
+        <text x="663" y="128" font-size="10.5" fill="var(--acc)" stroke="none">validate / resolve</text>
+        <line x1="655" y1="196" x2="655" y2="226" marker-end="url(#ar)"/>
+        <text x="663" y="216" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">1 LUW: end-date + insert + audit</text>
+        <line x1="655" y1="302" x2="655" y2="330" marker-end="url(#ar)"/>
+        <text x="663" y="322" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">BO events → BRF auto-process</text>
+
+        <line x1="560" y1="356" x2="460" y2="356" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+        <text x="510" y="347" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">PreferenceChanged · DncChanged</text>
+
+        <path d="M460 254 h150 v0" opacity="0"/>
+        <line x1="460" y1="254" x2="830" y2="91" opacity="0"/>
+        <path d="M460 262 h330 q16 0 16 -16 v-125 q0 -16 16 -16 h8" marker-end="url(#ar)"/>
+        <text x="700" y="253" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">send on resolved channel (IF_CPC_07)</text>
+
+        <path d="M460 270 h316 q16 0 16 -16 v-33 q0 -16 16 -16 h22" stroke="var(--acc2)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+        <text x="495" y="284" text-anchor="middle" font-size="10.5" fill="var(--acc2)" stroke="none">DNC sync + reconcile (IF_CPC_06)</text>
+
+        <path d="M830 319 h-40 q-16 0 -16 16 v0 q0 16 -16 16 h-298" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+        <text x="640" y="386" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">business events in (bill · outage · DR)</text>
+      </g>
+    </svg>
+    <figcaption><b>Preference data lives in exactly one place</b> — the S/4 tables behind the RAP service.
+    BTP holds no preference state (only queues and logs); the UI holds none. The green box is the decision
+    core: every save is validated by BRFplus, and every outbound message asks it before sending. The amber
+    path is compliance-critical: DNC changes broadcast to dialer/campaign systems with receipts and a daily
+    reconciliation.</figcaption>
+  </figure>
+
+  <!-- ============================ FIGURE 2 : SAVE FLOW ============================ -->
+  <figure>
+    <h2>2 · Save data flow — a CSR (or customer) changes a preference (IF_CPC_02)</h2>
+    <svg viewBox="0 0 980 300" role="img"
+         aria-label="Seven steps: the CPC UI builds a payload with a request UUID; API Management validates the JWT; the iFlow overwrites identity fields from the token; the RAP action runs BRFplus validation; then in one unit of work old records are end-dated, new ones inserted and audit written; finally events are emitted to Event Mesh and the refreshed preference set returns to the UI.">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="inherit">
+        <!-- step boxes on one baseline y=90 h=64 -->
+        <g>
+          <rect x="20"  y="90" width="120" height="64" rx="9"/>
+          <rect x="188" y="90" width="120" height="64" rx="9"/>
+          <rect x="356" y="90" width="120" height="64" rx="9"/>
+          <rect x="524" y="90" width="120" height="64" rx="9" stroke="var(--acc)" stroke-width="2"/>
+          <rect x="692" y="90" width="120" height="64" rx="9"/>
+          <rect x="840" y="196" width="120" height="60" rx="9"/>
+        </g>
+        <text x="80"  y="115" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">CPC UI</text>
+        <text x="80"  y="133" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">payload + requestId</text>
+        <text x="248" y="115" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">API Mgmt</text>
+        <text x="248" y="133" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">JWT · quota</text>
+        <text x="416" y="115" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">iFlow 02</text>
+        <text x="416" y="133" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">identity guard · dedup</text>
+        <text x="584" y="115" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc)" stroke="none">RAP + BRFplus</text>
+        <text x="584" y="133" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">FN_VALIDATE_CHANGE</text>
+        <text x="752" y="115" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">ZCPC tables</text>
+        <text x="752" y="133" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">1 LUW, all-or-nothing</text>
+        <text x="900" y="221" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Event Mesh</text>
+        <text x="900" y="239" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">zcpc/* topics</text>
+
+        <!-- numbered arrows -->
+        <line x1="140" y1="122" x2="188" y2="122" marker-end="url(#ar2)"/>
+        <line x1="308" y1="122" x2="356" y2="122" marker-end="url(#ar2)"/>
+        <line x1="476" y1="122" x2="524" y2="122" marker-end="url(#ar2)"/>
+        <line x1="644" y1="122" x2="692" y2="122" marker-end="url(#ar2)"/>
+        <path d="M812 122 h48 q16 0 16 16 v58" marker-end="url(#ar2)" stroke-dasharray="5 4"/>
+
+        <circle cx="164" cy="103" r="10" fill="var(--paper)" stroke="currentColor"/><text x="164" y="107" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">1</text>
+        <circle cx="332" cy="103" r="10" fill="var(--paper)" stroke="currentColor"/><text x="332" y="107" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">2</text>
+        <circle cx="500" cy="103" r="10" fill="var(--paper)" stroke="currentColor"/><text x="500" y="107" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">3</text>
+        <circle cx="668" cy="103" r="10" fill="var(--paper)" stroke="currentColor"/><text x="668" y="107" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">4</text>
+        <circle cx="864" cy="103" r="10" fill="var(--paper)" stroke="currentColor"/><text x="864" y="107" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">5</text>
+
+        <text x="164" y="80" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">POST saveChanges (OAuth)</text>
+        <text x="332" y="80" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">forward + correlation ID</text>
+        <text x="500" y="80" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">changedBy ← JWT, never payload</text>
+        <text x="668" y="80" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">valid? → end-date + insert + audit</text>
+        <text x="874" y="166" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">emit PreferenceChanged / DncChanged</text>
+
+        <!-- return path -->
+        <path d="M584 154 v46 q0 14 -14 14 h-476 q-14 0 -14 -14 v-36" stroke-dasharray="2 3" marker-end="url(#ar2)"/>
+        <text x="330" y="204" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">6 · response: per-change result + refreshed active set (or error envelope; one bad line rolls back all)</text>
+
+        <!-- half-open note -->
+        <text x="752" y="190" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">validity [from, to) — ended today = inactive today</text>
+      </g>
+    </svg>
+    <figcaption><b>The write path trusts the token, not the client.</b> Step 3 overwrites every identity
+    field from the JWT, so a payload cannot spoof another user or partner. Step 4 is the green decision
+    hop — mandatory types and channel rules enforced by BRFplus before anything is written. Step 5 is one
+    unit of work: records are end-dated and replaced (never updated or deleted), the audit row lands in the
+    same commit, and only then do events leave the system.</figcaption>
+  </figure>
+
+  <!-- ============================ FIGURE 3 : OUTBOUND ============================ -->
+  <figure>
+    <h2>3 · Event-driven communication — acting on the stored preference (IF_CPC_06 / 07)</h2>
+    <svg viewBox="0 0 980 430" role="img"
+         aria-label="Business events from billing, OMS, DRMS and the usage monitor flow through Event Mesh to the dispatch iFlow, which calls resolveComm in S/4 at send time. BRFplus answers send or suppress with a channel and address; sends go to the channel providers, suppressions are audited with a reason. DNC changes take a separate compliance path to dialer, campaign and print systems with receipts and daily reconciliation.">
+      <defs>
+        <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ar3A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/>
+        </marker>
+        <marker id="ar3C" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--acc2)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="inherit">
+        <!-- sources -->
+        <rect x="20" y="30" width="150" height="150" rx="9"/>
+        <text x="95" y="54" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Event sources</text>
+        <text x="95" y="76" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">Billing · FI-CA</text>
+        <text x="95" y="94" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">OMS outages</text>
+        <text x="95" y="112" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">DRMS events</text>
+        <text x="95" y="130" text-anchor="middle" font-size="11.5" fill="currentColor" stroke="none" opacity=".72">Usage monitor</text>
+        <text x="95" y="158" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".6">BillCreated · OutageDetected…</text>
+
+        <!-- event mesh -->
+        <rect x="240" y="76" width="140" height="58" rx="9"/>
+        <text x="310" y="100" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Event Mesh</text>
+        <text x="310" y="118" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">queues + DLQ</text>
+
+        <!-- dispatch iflow -->
+        <rect x="450" y="60" width="170" height="90" rx="9"/>
+        <text x="535" y="86" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">IF_CPC_07 Dispatch</text>
+        <text x="535" y="104" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">dedup · TTL · quiet hours</text>
+        <text x="535" y="121" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">storm collapse</text>
+        <text x="535" y="138" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">fail-closed</text>
+
+        <!-- s4 resolve -->
+        <rect x="450" y="210" width="170" height="66" rx="9" stroke="var(--acc)" stroke-width="2"/>
+        <text x="535" y="236" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc)" stroke="none">S/4 resolveComm</text>
+        <text x="535" y="254" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">BRFplus: prefs + DNC + fallback</text>
+        <text x="535" y="269" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">returns channel + address</text>
+
+        <!-- providers -->
+        <rect x="740" y="46" width="130" height="86" rx="9"/>
+        <text x="805" y="72" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Providers</text>
+        <text x="805" y="92" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">email · SMS · voice</text>
+        <text x="805" y="109" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">push · print</text>
+
+        <!-- audit -->
+        <path d="M740 190 a65 11 0 0 1 130 0 v44 a65 11 0 0 1 -130 0 z"/>
+        <path d="M740 190 a65 11 0 0 0 130 0"/>
+        <text x="805" y="219" text-anchor="middle" font-size="12" font-weight="650" fill="currentColor" stroke="none">ZCPC_AUDIT</text>
+        <text x="805" y="236" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".72">SENT / SUPPRESSED + reason</text>
+
+        <!-- dnc path -->
+        <rect x="240" y="320" width="180" height="64" rx="9" stroke="var(--acc2)" stroke-width="1.8"/>
+        <text x="330" y="346" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc2)" stroke="none">IF_CPC_06 DNC broadcast</text>
+        <text x="330" y="364" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">per-partner sequence guard</text>
+
+        <rect x="560" y="320" width="180" height="64" rx="9" stroke="var(--acc2)" stroke-width="1.8"/>
+        <text x="650" y="346" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc2)" stroke="none">Dialer · Campaign · Print</text>
+        <text x="650" y="364" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">receipts → audit (SLA evidence)</text>
+
+        <!-- arrows -->
+        <line x1="170" y1="105" x2="240" y2="105" stroke-dasharray="5 4" marker-end="url(#ar3)"/>
+        <line x1="380" y1="105" x2="450" y2="105" stroke-dasharray="5 4" marker-end="url(#ar3)"/>
+        <text x="415" y="96" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">consume</text>
+
+        <line x1="535" y1="150" x2="535" y2="210" stroke="var(--acc)" stroke-width="1.8" marker-end="url(#ar3A)"/>
+        <text x="545" y="176" font-size="10.5" fill="var(--acc)" stroke="none">ask at SEND TIME — never cached (R0)</text>
+
+        <path d="M620 96 h120" marker-end="url(#ar3)"/>
+        <text x="680" y="88" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">send=true → resolved channel</text>
+
+        <path d="M620 130 h60 q16 0 16 16 v46" marker-end="url(#ar3)"/>
+        <text x="712" y="160" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">suppress + reason</text>
+
+        <path d="M805 132 v34" marker-end="url(#ar3)"/>
+        <text x="815" y="154" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">outcome</text>
+
+        <!-- dnc arrows -->
+        <path d="M310 134 v186" stroke="var(--acc2)" stroke-width="1.8" stroke-dasharray="5 4" marker-end="url(#ar3C)"/>
+        <text x="318" y="300" font-size="10.5" fill="var(--acc2)" stroke="none">zcpc/DncChanged</text>
+        <line x1="420" y1="352" x2="560" y2="352" stroke="var(--acc2)" stroke-width="1.8" marker-end="url(#ar3C)"/>
+        <text x="490" y="343" text-anchor="middle" font-size="10.5" fill="var(--acc2)" stroke="none">ADD / REMOVE</text>
+        <path d="M740 340 h60 q16 0 16 -16 v-68" stroke="var(--acc2)" stroke-width="1.8" marker-end="url(#ar3C)"/>
+        <text x="836" y="300" text-anchor="middle" font-size="10.5" fill="var(--acc2)" stroke="none">receipts</text>
+        <path d="M650 384 v20 q0 14 -14 14 h-500 q-14 0 -14 -14 v-260 q0 -14 6 -14" stroke="var(--acc2)" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <text x="330" y="412" text-anchor="middle" font-size="10.5" fill="var(--acc2)" stroke="none">daily reconciliation: S/4 snapshot vs target lists → auto-repair + drift report</text>
+      </g>
+    </svg>
+    <figcaption><b>No message leaves without asking first.</b> The dispatch iFlow resolves the preference
+    per message at send time — a DNC set seconds earlier suppresses the very next call — and if S/4 is
+    unreachable it fails closed (suppress + alert, never send). Suppressions are written to the audit as
+    first-class evidence. The amber DNC path is independent: sequence-guarded delivery to every outbound
+    system, receipts as SLA evidence, and a daily reconciliation that catches anything retries missed.</figcaption>
+  </figure>
+</div>

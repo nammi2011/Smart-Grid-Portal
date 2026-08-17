@@ -1,0 +1,92 @@
+//=====================================================================
+// CPC - CDS interface views (VDM basic/interface layer)
+// One view per entity; consumption layer + service in file 03.
+//=====================================================================
+
+@AbapCatalog.viewEnhancementCategory: [#NONE]
+@AccessControl.authorizationCheck: #CHECK      // DCL: ZI_CPC_CUSTOMERPREF (see below)
+@EndUserText.label: 'CPC - Preference Type Master'
+@VDM.viewType: #BASIC
+define view entity ZI_CPC_PrefType
+  as select from zcpc_preftype
+{
+  key pref_type        as PreferenceType,
+      category         as Category,
+      scope            as Scope,
+      allowed_channels as AllowedChannels,
+      default_channel  as DefaultChannel,
+      default_value    as DefaultValue,
+      mandatory_flag   as IsMandatory,
+      source_system    as SourceSystem,
+      description      as Description
+}
+
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'CPC - Customer Preference'
+@VDM.viewType: #BASIC
+define view entity ZI_CPC_CustomerPref
+  as select from zcpc_pref
+  association [1..1] to ZI_CPC_PrefType as _Type
+    on $projection.PreferenceType = _Type.PreferenceType
+  association [0..1] to I_BusinessPartner as _Partner        // released SAP view [validate]
+    on $projection.BusinessPartner = _Partner.BusinessPartner
+{
+  key pref_id       as PreferenceUUID,
+      partner       as BusinessPartner,
+      vkont         as ContractAccount,        // initial when Scope = 'BP'
+      scope         as Scope,
+      pref_type     as PreferenceType,
+      channel       as Channel,
+      pref_value    as PreferenceValue,
+      valid_from    as ValidFrom,
+      valid_to      as ValidTo,
+      source        as Source,
+      changed_by    as ChangedBy,
+      case_id       as CaseID,
+      changed_at    as ChangedAt,
+
+      // Active flag with the half-open convention [ValidFrom, ValidTo):
+      // a record ended today is already inactive today.
+      case
+        when valid_to is initial          then 'X'
+        when valid_to >  $session.system_date then 'X'
+        else ''
+      end           as IsActive,
+
+      _Type,
+      _Partner
+}
+
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'CPC - Audit Log'
+@VDM.viewType: #BASIC
+define view entity ZI_CPC_Audit
+  as select from zcpc_audit
+{
+  key audit_id      as AuditUUID,
+      pref_id       as PreferenceUUID,
+      partner       as BusinessPartner,
+      vkont         as ContractAccount,
+      action        as Action,
+      prev_value    as PreviousValue,
+      new_value     as NewValue,
+      source        as Source,
+      changed_by    as ChangedBy,
+      changed_by_role as ChangedByRole,
+      on_behalf_of  as OnBehalfOf,
+      reason_code   as ReasonCode,
+      correlation_id as CorrelationId,
+      ts            as ChangedAt
+}
+
+//---------------------------------------------------------------------
+// Access control (DCL) - sketch. CSR/admin roles see all partners;
+// a portal-customer technical context is restricted to its own partner
+// (partner mapped from the IAS subject via ZCPC_USERMAP [design decision]).
+//---------------------------------------------------------------------
+// @EndUserText.label: 'CPC pref access'
+// @MappingRole: true
+// define role ZI_CPC_CUSTOMERPREF {
+//   grant select on ZI_CPC_CustomerPref
+//     where ( ) = aspect pfcg_auth( ZCPC_AUTH, PARTNER, ACTVT = '03' );
+// }

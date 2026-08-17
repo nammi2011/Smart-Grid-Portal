@@ -1,0 +1,70 @@
+*=====================================================================
+* CPC - Database tables (ABAP DDL, S/4HANA)
+* Package: ZCPC | Transport: workbench request
+* Storage layer: tables store the data; CDS views (file 02) expose it;
+* the RAP service (file 03) is the API. See docs/cpc-solution-package.md
+*=====================================================================
+
+@EndUserText.label : 'CPC Preference Type Master'
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #C          " customizing - transported
+@AbapCatalog.dataMaintenance : #ALLOWED
+define table zcpc_preftype {
+  key client        : abap.clnt not null;
+  key pref_type     : abap.char(20) not null;   " PAPERLESS, DNC, OUT_DETECT ...
+  category          : abap.char(12) not null;   " BILLING/OUTAGE/USAGE/PROGRAM/MARKETING/PRIVACY
+  scope             : abap.char(2)  not null;   " BP | CA
+  allowed_channels  : abap.char(60) not null;   " comma list: EMAIL,SMS,VOICE,PUSH,POST,ALL
+  default_channel   : abap.char(10) not null;
+  default_value     : abap.char(3)  not null;   " IN | OUT
+  mandatory_flag    : abap_boolean;             " X = cannot opt out (PAST_DUE)
+  source_system     : abap.char(12);            " PORTAL/OMS/DRMS/CSR default origin
+  description       : abap.char(60);
+}
+
+@EndUserText.label : 'CPC Customer Preference Records'
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A          " application data - never transported
+define table zcpc_pref {
+  key client        : abap.clnt not null;
+  key pref_id       : sysuuid_x16 not null;     " GUID
+  partner           : bu_partner not null;      " BUT000-PARTNER
+  vkont             : vkont_kk;                 " FKKVKP contract account; INITIAL when scope=BP
+  scope             : abap.char(2)  not null;   " BP | CA (redundant w/ preftype, denormalized for reads)
+  pref_type         : abap.char(20) not null;   " FK zcpc_preftype
+  channel           : abap.char(10) not null;
+  pref_value        : abap.char(3)  not null;   " IN | OUT
+  valid_from        : abap.dats not null;
+  valid_to          : abap.dats;                " INITIAL = open-ended.
+                                                " CONVENTION: half-open [from, to) -
+                                                " record is INACTIVE on valid_to itself
+  source            : abap.char(12) not null;   " PORTAL/CSR/OMS/DRMS/BRF/MIGRATION
+  changed_by        : abap.char(40) not null;   " portal user / CSR user / SYSTEM
+  case_id           : abap.char(20);            " Service Cloud V2 case (CSR saves)
+  changed_at        : timestampl not null;
+}
+* Secondary index Z01: partner, pref_type, valid_to  (active-record reads)
+* Secondary index Z02: partner, vkont, valid_to      (account view)
+
+@EndUserText.label : 'CPC Preference Audit Log (insert-only)'
+@AbapCatalog.tableCategory : #TRANSPARENT
+@AbapCatalog.deliveryClass : #A
+define table zcpc_audit {
+  key client        : abap.clnt not null;
+  key audit_id      : sysuuid_x16 not null;
+  pref_id           : sysuuid_x16;
+  partner           : bu_partner not null;
+  vkont             : vkont_kk;
+  action            : abap.char(12) not null;   " SET/END/REPLACE/COPY/APPLY_ALL/BRF_AUTO
+  prev_value        : abap.char(30);
+  new_value         : abap.char(30);
+  source            : abap.char(12) not null;
+  changed_by        : abap.char(40) not null;
+  changed_by_role   : abap.char(10) not null;   " CUSTOMER | CSR | SYSTEM
+  on_behalf_of      : bu_partner;
+  reason_code       : abap.char(20);
+  correlation_id    : abap.char(40);
+  ts                : timestampl not null;
+}
+* No maintenance dialog, no update/delete function modules - insert only.
+* Archiving object ZCPC_AUD per retention policy (see solution doc sec. 9).

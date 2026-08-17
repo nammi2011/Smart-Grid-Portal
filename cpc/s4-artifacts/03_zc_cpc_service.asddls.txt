@@ -1,0 +1,72 @@
+//=====================================================================
+// CPC - Consumption layer + RAP service (the API the iFlows/UI call)
+//=====================================================================
+
+//----------------------------------------------- consumption projection
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'CPC - Customer Preference (consumption)'
+@Metadata.allowExtensions: true
+define root view entity ZC_CPC_CustomerPref
+  provider contract transactional_query
+  as projection on ZI_CPC_CustomerPref
+{
+  key PreferenceUUID,
+      BusinessPartner,
+      ContractAccount,
+      Scope,
+      PreferenceType,
+      _Type.Description as PreferenceText,
+      _Type.Category    as Category,
+      _Type.IsMandatory as IsMandatory,
+      Channel,
+      PreferenceValue,
+      ValidFrom,
+      ValidTo,
+      IsActive,
+      Source,
+      ChangedBy,
+      CaseID,
+      ChangedAt
+}
+
+//----------------------------------------------- behavior definition (sketch)
+// managed implementation in class zbp_i_cpc_customerpref unique;
+// strict ( 2 );
+//
+// define behavior for ZI_CPC_CustomerPref alias Pref
+// persistent table zcpc_pref
+// lock master
+// authorization master ( instance )
+// etag master ChangedAt
+// {
+//   create;                    // internal only - external callers use the actions
+//   // NO update, NO delete: records are end-dated, never changed in place (CPC03)
+//
+//   action ( features : instance ) endPreference result [1] $self;
+//   static action saveChanges parameter ZCPC_A_SAVECHANGES result [1] ZCPC_A_SAVERESULT;
+//   static action copyPreferences parameter ZCPC_A_COPY result [1] ZCPC_A_SAVERESULT;
+//   static action applyAll parameter ZCPC_A_APPLYALL result [1] ZCPC_A_SAVERESULT;
+//   static function resolveComm parameter ZCPC_A_RESOLVE result [1] ZCPC_A_RESOLVERESULT;
+// }
+//
+// saveChanges implementation (zbp_i_cpc_customerpref):
+//   1. FN_VALIDATE_CHANGE via BRFplus (cl_fdt_function_process=>process) [validate]
+//   2. end-date replaced rows (valid_to = new valid_from - half-open convention)
+//   3. insert new rows; scope BP => vkont = initial
+//   4. insert zcpc_audit rows (same LUW)
+//   5. raise RAP business event PreferenceChanged (event binding -> Event Mesh) [validate]
+
+//----------------------------------------------- service definition
+@EndUserText.label: 'CPC Preference Service'
+define service ZUI_CPC_PREF {
+  expose ZC_CPC_CustomerPref as Preferences;
+  expose ZI_CPC_PrefType     as PreferenceTypes;
+  expose ZI_CPC_Audit        as AuditLog;
+}
+// Service binding ZUI_CPC_PREF_O4: OData V4, published.
+// External access: communication scenario ZCPC_COM_0001 + arrangement per
+// consumer (Integration Suite technical user / principal propagation).
+
+//----------------------------------------------- analytics (optional)
+// ZI_CPC_PrefCounts: aggregation view (opt-in rates per type/channel) for
+// SAC / embedded analytics - see solution doc sec. 8.
