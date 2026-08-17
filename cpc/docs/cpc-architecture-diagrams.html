@@ -4,13 +4,15 @@
     --paper:#f4f5f4;--surface:#ffffff;--ink:#16211d;--muted:#5b6a64;--hair:#dfe3e0;
     --acc:#0a6e5c;         /* the decision hop: BRFplus / preference resolution */
     --acc2:#b8791a;        /* compliance path: DNC */
+    --ai:#6b4fbb;          /* AI layer: proposes & explains, never decides */
+    --no:#c2372f;          /* forbidden path */
   }
   @media(prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
     --paper:#0e1311;--surface:#171e1b;--ink:#edf2ef;--muted:#9fb0a8;--hair:#2a332e;
-    --acc:#3ec2a4;--acc2:#d9a03c;
+    --acc:#3ec2a4;--acc2:#d9a03c;--ai:#a48fe0;--no:#e06a5f;
   }}
-  :root[data-theme="dark"]{--paper:#0e1311;--surface:#171e1b;--ink:#edf2ef;--muted:#9fb0a8;--hair:#2a332e;--acc:#3ec2a4;--acc2:#d9a03c}
-  :root[data-theme="light"]{--paper:#f4f5f4;--surface:#ffffff;--ink:#16211d;--muted:#5b6a64;--hair:#dfe3e0;--acc:#0a6e5c;--acc2:#b8791a}
+  :root[data-theme="dark"]{--paper:#0e1311;--surface:#171e1b;--ink:#edf2ef;--muted:#9fb0a8;--hair:#2a332e;--acc:#3ec2a4;--acc2:#d9a03c;--ai:#a48fe0;--no:#e06a5f}
+  :root[data-theme="light"]{--paper:#f4f5f4;--surface:#ffffff;--ink:#16211d;--muted:#5b6a64;--hair:#dfe3e0;--acc:#0a6e5c;--acc2:#b8791a;--ai:#6b4fbb;--no:#c2372f}
   *{box-sizing:border-box}
   body{margin:0;background:var(--paper);color:var(--ink);
     font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.55;font-size:15px}
@@ -42,6 +44,7 @@
     <span><span class="k d"></span> asynchronous event / queue</span>
     <span><span class="k a"></span> preference decision (BRFplus)</span>
     <span><span class="k c"></span> DNC compliance path</span>
+    <span><span class="k" style="border-top-color:var(--ai)"></span> AI layer (proposes / explains)</span>
   </div>
 
   <!-- ============================ FIGURE 1 : LANDSCAPE ============================ -->
@@ -335,5 +338,88 @@
     unreachable it fails closed (suppress + alert, never send). Suppressions are written to the audit as
     first-class evidence. The amber DNC path is independent: sequence-guarded delivery to every outbound
     system, receipts as SLA evidence, and a daily reconciliation that catches anything retries missed.</figcaption>
+  </figure>
+
+  <!-- ============================ FIGURE 4 : AI PLACEMENT ============================ -->
+  <figure>
+    <h2>4 · Where the LLM sits — AI proposes, BRFplus decides, the core writes</h2>
+    <svg viewBox="0 0 980 430" role="img"
+         aria-label="The AI layer turns natural language into proposed preference changes and summarizes history for CSRs, but every change passes human confirmation, the saveChanges API, BRFplus validation and the core writer. The send and suppress decision path contains no AI, and a crossed-out arrow shows the LLM can never write to the database directly.">
+      <defs>
+        <marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ar4A" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--acc)"/>
+        </marker>
+        <marker id="ar4P" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ai)"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.4" font-family="inherit">
+        <rect x="20" y="30" width="360" height="370" rx="12" stroke="var(--ai)" stroke-dasharray="4 4" opacity=".8"/>
+        <text x="200" y="52" text-anchor="middle" font-size="11.5" fill="var(--ai)" stroke="none" letter-spacing=".08em">AI LAYER — PROPOSES &amp; EXPLAINS</text>
+
+        <rect x="45" y="76" width="310" height="56" rx="9"/>
+        <text x="200" y="99" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Customer, in natural language</text>
+        <text x="200" y="117" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">&#8220;stop calling me, keep outage texts&#8221;</text>
+
+        <rect x="45" y="168" width="310" height="66" rx="9" stroke="var(--ai)" stroke-width="2"/>
+        <text x="200" y="193" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--ai)" stroke="none">LLM  (GenAI Hub / Joule)</text>
+        <text x="200" y="211" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">intent &#8594; proposed changes JSON</text>
+        <text x="200" y="226" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">audit summaries for the CSR copilot</text>
+
+        <rect x="45" y="290" width="310" height="56" rx="9"/>
+        <text x="200" y="313" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">CSR copilot (Service Cloud V2)</text>
+        <text x="200" y="331" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">&#8220;why no letters?&#8221; &#183; case-note drafts</text>
+
+        <rect x="440" y="30" width="520" height="370" rx="12" stroke="var(--acc)" stroke-dasharray="4 4" opacity=".8"/>
+        <text x="700" y="52" text-anchor="middle" font-size="11.5" fill="var(--acc)" stroke="none" letter-spacing=".08em">DETERMINISTIC CORE — DECIDES &amp; WRITES</text>
+
+        <rect x="465" y="76" width="200" height="56" rx="9"/>
+        <text x="565" y="99" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Human confirmation</text>
+        <text x="565" y="117" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">plain-language rendering</text>
+
+        <rect x="720" y="76" width="215" height="56" rx="9"/>
+        <text x="827" y="99" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">saveChanges API</text>
+        <text x="827" y="117" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">identity guard &#183; all-or-nothing</text>
+
+        <rect x="720" y="176" width="215" height="60" rx="9" stroke="var(--acc)" stroke-width="2"/>
+        <text x="827" y="200" text-anchor="middle" font-size="12.5" font-weight="650" fill="var(--acc)" stroke="none">BRFplus ZCPC</text>
+        <text x="827" y="218" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">validate &#183; DNC policy &#183; send/suppress</text>
+
+        <rect x="465" y="176" width="200" height="60" rx="9"/>
+        <text x="565" y="200" text-anchor="middle" font-size="12.5" font-weight="650" fill="currentColor" stroke="none">Business events</text>
+        <text x="565" y="218" text-anchor="middle" font-size="11" fill="currentColor" stroke="none" opacity=".72">bill &#183; outage &#183; DR &#8594; dispatch</text>
+
+        <path d="M720 286 a70 11 0 0 1 140 0 v46 a70 11 0 0 1 -140 0 z"/>
+        <path d="M720 286 a70 11 0 0 0 140 0"/>
+        <text x="790" y="316" text-anchor="middle" font-size="12" font-weight="650" fill="currentColor" stroke="none">ZCPC_PREF / AUDIT</text>
+        <text x="790" y="333" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".72">written only by the core</text>
+
+        <line x1="200" y1="132" x2="200" y2="168" stroke="var(--ai)" stroke-width="1.8" marker-end="url(#ar4P)"/>
+        <path d="M355 201 h55 q16 0 16 -16 v-65 q0 -16 16 -16 h23" stroke="var(--ai)" stroke-width="1.8" marker-end="url(#ar4P)"/>
+        <text x="415" y="140" text-anchor="middle" font-size="10.5" fill="var(--ai)" stroke="none">proposal only</text>
+        <line x1="665" y1="104" x2="720" y2="104" marker-end="url(#ar4)"/>
+        <line x1="827" y1="132" x2="827" y2="176" stroke="var(--acc)" stroke-width="1.8" marker-end="url(#ar4A)"/>
+        <text x="836" y="158" font-size="10.5" fill="var(--acc)" stroke="none">validate</text>
+        <line x1="827" y1="236" x2="800" y2="280" marker-end="url(#ar4)"/>
+        <text x="845" y="262" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">end-date + insert + audit</text>
+        <line x1="665" y1="206" x2="720" y2="206" stroke="var(--acc)" stroke-width="1.8" marker-end="url(#ar4A)"/>
+        <text x="693" y="168" text-anchor="middle" font-size="10.5" fill="var(--acc)" stroke="none">no AI here</text>
+
+        <path d="M720 322 h-320 q-16 0 -16 -4" stroke-dasharray="5 4" marker-end="url(#ar4)"/>
+        <text x="545" y="313" text-anchor="middle" font-size="10.5" fill="currentColor" stroke="none" opacity=".8">read-only: audit &#8594; summaries</text>
+
+        <path d="M200 234 v130 q0 16 16 16 h480 q16 0 16 -14" stroke="var(--no)" stroke-width="1.6" stroke-dasharray="6 4"/>
+        <line x1="440" y1="366" x2="466" y2="394" stroke="var(--no)" stroke-width="2.4"/>
+        <line x1="466" y1="366" x2="440" y2="394" stroke="var(--no)" stroke-width="2.4"/>
+        <text x="453" y="415" text-anchor="middle" font-size="10.5" font-weight="650" fill="var(--no)" stroke="none">LLM never writes &#183; never decides send/suppress</text>
+      </g>
+    </svg>
+    <figcaption><b>AI proposes; BRFplus decides; the core writes.</b> A natural-language request becomes a
+    <em>proposed</em> change that the customer confirms and the normal trusted path executes — identity from the
+    token, BRFplus validation, all-or-nothing save, audit row. The send/suppress path contains no AI at all, and
+    the red crossed path is structural, not policy: the model has no write access to grant.</figcaption>
   </figure>
 </div>
