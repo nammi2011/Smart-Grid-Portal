@@ -1,0 +1,469 @@
+openapi: 3.0.3
+info:
+  title: SmartGrid Energy Customer Portal API
+  version: 1.0.0
+  description: >
+    REST API for the Utility Customer Digital Portal (Preference Center, Program
+    Enrollment, Rate Analyzer). All operations require OAuth 2.0 bearer tokens issued
+    by SAP Cloud Identity Services / XSUAA. Customers may only access their own
+    resources; CSR/admin roles are governed by XSUAA scopes.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /customers/{customerId}:
+    get:
+      summary: Get customer profile
+      parameters: [{ $ref: '#/components/parameters/customerId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /accounts/{accountId}:
+    get:
+      summary: Get account with balance and current rate
+      parameters: [{ $ref: '#/components/parameters/accountId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /accounts/{accountId}/usage:
+    get:
+      summary: Get usage (monthly aggregates or interval detail)
+      parameters:
+        - { $ref: '#/components/parameters/accountId' }
+        - { name: months, in: query, schema: { type: integer, enum: [12, 24] } }
+        - { name: resolution, in: query, schema: { type: string, enum: [monthly, interval], default: monthly } }
+        - { name: date, in: query, schema: { type: string, format: date }, description: Required when resolution=interval }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UsageResponse' } } } }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /accounts/{accountId}/preferences:
+    get:
+      summary: Get preferences grouped by section
+      parameters: [{ $ref: '#/components/parameters/accountId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PreferenceSet' } } } }
+    put:
+      summary: Update preferences (bulk, audited)
+      parameters: [{ $ref: '#/components/parameters/accountId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreferenceUpdate' }
+            example:
+              changes:
+                - { category: communication, key: sms, value: "false" }
+                - { category: alerts, key: monthlyBillThreshold, value: "250", threshold: 250 }
+                - { category: billing, key: paperless, value: "true" }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PreferenceSet' }
+              example:
+                communication: { email: true, sms: false, phone: false, push: true, postalMail: false, preferredChannel: email }
+                billing: { paperless: true, billReady: true, pastDue: true }
+                alerts: { highUsageAlert: true, monthlyBillThreshold: 250, dailyThresholdKwh: 45 }
+        '400': { $ref: '#/components/responses/Validation' }
+  /programs:
+    get:
+      summary: List programs (marketplace)
+      parameters:
+        - { name: category, in: query, schema: { type: string, enum: [EFFICIENCY, DEMAND_RESPONSE, EV, RENEWABLE, ASSISTANCE] } }
+        - { name: filter, in: query, schema: { type: string, enum: [all, eligible, recommended, enrolled] } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Program' } } } } }
+  /programs/{programId}:
+    get:
+      summary: Program detail
+      parameters: [{ $ref: '#/components/parameters/programId' }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Program' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /programs/{programId}/eligibility-check:
+    post:
+      summary: Evaluate eligibility rules for the caller's account
+      parameters: [{ $ref: '#/components/parameters/programId' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { accountId: { type: string } }, required: [accountId] }
+            example: { accountId: "1000456789" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EligibilityResult' }
+              examples:
+                eligible:
+                  summary: All rules met
+                  value:
+                    outcome: ELIGIBLE
+                    rules:
+                      - { description: "Residential customer", passed: true }
+                      - { description: "AMI (smart) meter installed", passed: true }
+                      - { description: "Compatible smart thermostat", passed: true }
+                infoRequired:
+                  summary: Eligible pending additional information
+                  value:
+                    outcome: INFO_REQUIRED
+                    rules:
+                      - { description: "Residential customer", passed: true }
+                      - { description: "AMI (smart) meter installed", passed: true }
+                      - { description: "Compatible smart thermostat", passed: false, reason: "Add a compatible smart thermostat to qualify." }
+  /programs/{programId}/enroll:
+    post:
+      summary: Submit enrollment
+      parameters: [{ $ref: '#/components/parameters/programId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnrollmentRequest' }
+            example:
+              accountId: "1000456789"
+              termsAccepted: true
+              termsVersion: "v1.0"
+              providedInfo: { thermostatBrand: "ecobee" }
+      responses:
+        '201':
+          description: Created (status=SUBMITTED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Enrollment' }
+              example:
+                id: "ENR-40218"
+                programId: "PGM-THERMO-DR"
+                status: SUBMITTED
+                submittedAt: "2026-07-21T15:04:00Z"
+                statusHistory:
+                  - { status: SUBMITTED, at: "2026-07-21T15:04:00Z" }
+        '409':
+          description: Duplicate active enrollment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { code: DUPLICATE_ENROLLMENT, message: "You already have an active enrollment in this program.", correlationId: "b7c1a9e2-...", retryable: false }
+        '422':
+          description: Not eligible
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { code: NOT_ELIGIBLE, message: "You are not eligible for this program.", correlationId: "b7c1a9e2-...", retryable: false }
+  /enrollments:
+    get:
+      summary: My enrollments
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Enrollment' } } } } }
+  /rates:
+    get:
+      summary: Rate catalog
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RatePlan' } } } } }
+  /rates/eligible:
+    get:
+      summary: Rates the caller's account may switch to
+      parameters: [{ name: accountId, in: query, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RatePlan' } } } } }
+  /rates/analyze:
+    post:
+      summary: Analyze historical usage against all eligible rates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId]
+              properties:
+                accountId: { type: string }
+                months: { type: integer, enum: [12, 24], default: 12 }
+                from: { type: string, pattern: '^\d{4}-\d{2}$' }
+                to: { type: string, pattern: '^\d{4}-\d{2}$' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RateAnalysis' } } } }
+  /rates/simulate:
+    post:
+      summary: What-if simulation with behavior adjustments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SimulationRequest' }
+            example:
+              accountId: "1000456789"
+              baseMonths: 12
+              scenario:
+                evChargingWindow: OVERNIGHT
+                evMonthlyKwh: 300
+                thermostatSetback: true
+                peakShiftPercent: 0
+                solarKw: 0
+                battery: false
+                consumptionGrowthPercent: 0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RateAnalysis' }
+              example:
+                analysisId: "sim-9f2a"
+                period: { from: "2025-08", to: "2026-07", months: 12 }
+                currentRate: { id: R1, name: "Residential Standard R1", annualCost: 2119.44, monthlyAverage: 176.62 }
+                alternatives:
+                  - { id: RT-EV, name: "EV Time-of-Use", annualCost: 1767.90, savings: 351.54, savingsPercent: 16.6, eligible: true, risk: MEDIUM }
+                  - { id: R-TOU, name: "Residential Time-of-Use", annualCost: 1961.20, savings: 158.24, savingsPercent: 7.5, eligible: true, risk: MEDIUM }
+                recommendation:
+                  rateId: RT-EV
+                  confidence: 0.87
+                  explanation: "We recommend the EV Time-of-Use Rate because about 70% of your usage occurs during off-peak and overnight hours, and your registered EV can charge overnight at the lowest price. Estimated savings ~$352/year (16.6%). This is an estimate, not a guarantee."
+  /rates/change-request:
+    post:
+      summary: Request a rate change (re-verifies eligibility)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId, toRateId]
+              properties:
+                accountId: { type: string }
+                toRateId: { type: string }
+                requestedEffectiveDate: { type: string, format: date }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/RateChangeRequest' } } } }
+        '422': { description: Not eligible, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+  /notifications:
+    get:
+      summary: Notification center
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Notification' } } } } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    customerId: { name: customerId, in: path, required: true, schema: { type: string } }
+    accountId: { name: accountId, in: path, required: true, schema: { type: string } }
+    programId: { name: programId, in: path, required: true, schema: { type: string } }
+  responses:
+    Forbidden:
+      description: Caller does not own the resource / lacks role
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Not found (or not visible to caller)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Validation:
+      description: Request validation failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unavailable:
+      description: Downstream system unavailable (retryable)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string, description: Customer-safe message }
+            correlationId: { type: string }
+            retryable: { type: boolean }
+            details: { type: array, items: { type: object } }
+    Customer:
+      type: object
+      properties:
+        id: { type: string }
+        customerType: { type: string, enum: [RESIDENTIAL, COMMERCIAL] }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string }
+        hasEV: { type: boolean }
+        hasSolar: { type: boolean }
+        hasBattery: { type: boolean }
+        hasSmartThermostat: { type: boolean }
+        accounts: { type: array, items: { $ref: '#/components/schemas/Account' } }
+    Account:
+      type: object
+      properties:
+        id: { type: string }
+        accountNumber: { type: string }
+        serviceAddress: { type: string }
+        currentBalance: { type: number }
+        nextPaymentDate: { type: string, format: date }
+        currentRateId: { type: string }
+        isSmartMeter: { type: boolean }
+    UsageResponse:
+      type: object
+      properties:
+        resolution: { type: string }
+        monthly:
+          type: array
+          items:
+            type: object
+            properties:
+              yearMonth: { type: string }
+              totalKwh: { type: number }
+              peakKwh: { type: number }
+              offPeakKwh: { type: number }
+              superOffPeakKwh: { type: number }
+              peakDemandKw: { type: number }
+              billedAmount: { type: number }
+        interval:
+          type: array
+          items:
+            type: object
+            properties:
+              hour: { type: integer }
+              kWh: { type: number }
+              touPeriod: { type: string, enum: [PEAK, OFFPEAK, SUPER_OFFPEAK] }
+    PreferenceSet:
+      type: object
+      additionalProperties: true
+      description: Sections (communication, billing, alerts, outage, programs, marketing, privacy) each mapping keys to values.
+    PreferenceUpdate:
+      type: object
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            required: [category, key, value]
+            properties:
+              category: { type: string }
+              key: { type: string }
+              value: { type: string }
+              channel: { type: string }
+              threshold: { type: number }
+              effectiveDate: { type: string, format: date }
+    Program:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        category: { type: string }
+        shortDescription: { type: string }
+        estimatedSavings: { type: string }
+        incentiveAmount: { type: number }
+        enrollmentStart: { type: string, format: date }
+        enrollmentEnd: { type: string, format: date }
+        capacity: { type: integer }
+        enrolledCount: { type: integer }
+        eligibilityOutcome: { type: string, enum: [ELIGIBLE, POTENTIALLY_ELIGIBLE, INFO_REQUIRED, NOT_ELIGIBLE] }
+    EligibilityResult:
+      type: object
+      properties:
+        outcome: { type: string, enum: [ELIGIBLE, POTENTIALLY_ELIGIBLE, INFO_REQUIRED, NOT_ELIGIBLE] }
+        rules:
+          type: array
+          items:
+            type: object
+            properties:
+              description: { type: string }
+              passed: { type: boolean }
+              reason: { type: string }
+    EnrollmentRequest:
+      type: object
+      required: [accountId, termsAccepted]
+      properties:
+        accountId: { type: string }
+        termsAccepted: { type: boolean }
+        termsVersion: { type: string }
+        providedInfo: { type: object, additionalProperties: true }
+    Enrollment:
+      type: object
+      properties:
+        id: { type: string }
+        programId: { type: string }
+        status: { type: string, enum: [DRAFT, SUBMITTED, UNDER_REVIEW, INFO_REQUIRED, APPROVED, ENROLLED, REJECTED, CANCELLED] }
+        submittedAt: { type: string, format: date-time }
+        statusHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              at: { type: string, format: date-time }
+    RatePlan:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        rateType: { type: string, enum: [FLAT, TIERED, TOU, SEASONAL, DEMAND] }
+        riskLevel: { type: string, enum: [LOW, MEDIUM, HIGH] }
+        eligible: { type: boolean }
+    RateAnalysis:
+      type: object
+      properties:
+        analysisId: { type: string }
+        period: { type: object, properties: { from: { type: string }, to: { type: string }, months: { type: integer } } }
+        currentRate:
+          type: object
+          properties:
+            id: { type: string }
+            name: { type: string }
+            annualCost: { type: number }
+            monthlyAverage: { type: number }
+        alternatives:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              annualCost: { type: number }
+              savings: { type: number }
+              savingsPercent: { type: number }
+              eligible: { type: boolean }
+              risk: { type: string }
+        recommendation:
+          type: object
+          properties:
+            rateId: { type: string }
+            confidence: { type: number }
+            explanation: { type: string }
+    SimulationRequest:
+      type: object
+      required: [accountId, scenario]
+      properties:
+        accountId: { type: string }
+        baseMonths: { type: integer, enum: [12, 24], default: 12 }
+        scenario:
+          type: object
+          properties:
+            evChargingWindow: { type: string, enum: [EVENING, OVERNIGHT] }
+            evMonthlyKwh: { type: number, minimum: 0, maximum: 1500 }
+            thermostatSetback: { type: boolean }
+            peakShiftPercent: { type: number, minimum: 0, maximum: 50 }
+            solarKw: { type: number, minimum: 0, maximum: 20 }
+            battery: { type: boolean }
+            consumptionGrowthPercent: { type: number, minimum: -30, maximum: 50 }
+    RateChangeRequest:
+      type: object
+      properties:
+        id: { type: string }
+        fromRateId: { type: string }
+        toRateId: { type: string }
+        status: { type: string, enum: [SUBMITTED, UNDER_REVIEW, APPROVED, COMPLETED, REJECTED, CANCELLED] }
+        requestedAt: { type: string, format: date-time }
+    Notification:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        severity: { type: string }
+        isRead: { type: boolean }
+        sentAt: { type: string, format: date-time }
