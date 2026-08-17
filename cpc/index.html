@@ -342,6 +342,11 @@ const CH_LABEL = {EMAIL:'Email',SMS:'SMS',VOICE:'Voice',PUSH:'Push',POST:'Mail',
 
 const today = () => new Date().toISOString().slice(0,10);
 const uid = (p) => p + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
+// RFC4122 UUID for the save-attempt requestId (IF_CPC_02 idempotency, spec §4.1).
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+    }));
 
 //---- Preference records (validity-dated; ended, never deleted — CPC03) ------
 // Built from the selected customer profile's seed list.
@@ -363,7 +368,10 @@ const isActive = r => !r.validTo || r.validTo > today();
 const activeFor = (type) => RECORDS.filter(r => r.type === type && isActive(r));
 
 //---- Session state ----------------------------------------------------------
-const S = { showHistory:false, filter:'ALL', pending:[], audit:[], events:[] };
+// saveRequestId: ONE UUID per save attempt (IF_CPC_02 idempotency). Created when the
+// first change is staged, REUSED on retry after a failed save (so the CPI dedup store
+// replays instead of double-writing), and rotated only after success or discard.
+const S = { showHistory:false, filter:'ALL', pending:[], audit:[], events:[], saveRequestId:null };
 
 //---- Pending-change model (staged until Save — CPC01/CPC03 semantics) -------
 // {kind:'SET'|'END'|'CHANNEL', type, channel, value, prevRecId}
@@ -433,6 +441,7 @@ function applyLocally(payload){
     }
   });
   S.pending = [];
+  S.saveRequestId = null;   // success → next save attempt gets a fresh requestId
   render();
 }
 
@@ -457,7 +466,10 @@ function buildPayload(){
              previousValue: prev ? prev.value+'/'+prev.channel : null,
              reasonCode:'CUSTOMER_REQUEST' };
   });
+  // Assign the request UUID lazily on the first staged change of this attempt.
+  if (S.pending.length && !S.saveRequestId) S.saveRequestId = uuid();
   return {
+    requestId: S.saveRequestId,
     businessPartner: CUSTOMER.bp, contractAccount: CUSTOMER.ca,
     source: ACTOR.src, changedBy: ACTOR.id, changedByRole: ACTOR.role,
     onBehalfOf: isCSR ? CUSTOMER.bp : null,
@@ -752,7 +764,7 @@ document.addEventListener('click', e => {
   if (t.dataset.ev) { fireEvent(t.dataset.ev); return; }
   if (t.dataset.close !== undefined) { $('#modal').innerHTML=''; return; }
   if (t.dataset.act === 'save') { saveChanges(); return; }
-  if (t.dataset.act === 'discard') { S.pending=[]; render(); toast('Changes discarded.'); return; }
+  if (t.dataset.act === 'discard') { S.pending=[]; S.saveRequestId=null; render(); toast('Changes discarded.'); return; }
   if (t.dataset.act === 'copy') { modalCopy(); return; }
   if (t.dataset.act === 'applyall') { modalApplyAll(); return; }
   if (t.dataset.do === 'copy') {
