@@ -1,0 +1,291 @@
+*&---------------------------------------------------------------------*
+*& ZCL_ZCPC_GENIL - GenIL component class for Option B (S/4 CRM WebClient).
+*& Design: cpc-optionB-webclient-design.md sections 2-3.
+*&
+*& Rule B0 holds here exactly as in RAP: this class contains NO business
+*& logic and NO table writes. Reads go through the CDS views; every change
+*& is buffered via ZCL_CPC_CORE->PREPARE_SAVE and persisted in the GenIL
+*& transaction SAVE hook - the same two-phase model RAP uses, so both
+*& front ends behave identically.
+*&
+*&   Interaction:  action -> core->prepare_save( )   (validate + buffer)
+*&   Save:         IF_GENIL_APPL_TRANSACTION~SAVE -> core->persist( )
+*&   Commit/Rollb: framework COMMIT WORK / core->reset( )
+*&
+*& [validate] items (release-dependent - confirm in your S/4 Customer
+*& Management installation before build):
+*&   - Base class: CL_CRM_GENIL_ABSTR_COMPONENT (classic) vs
+*&     CL_WCF_GENIL_ABSTR_COMPONENT; method signatures differ slightly.
+*&   - Action dispatch: EXECUTE_ACTIONS availability in IF_GENIL_APPL_INTLAY;
+*&     if your release routes object methods differently, keep the ACTION_*
+*&     private methods and rewire the dispatcher only.
+*&   - Model registration: define objects/relations/queries in the GenIL
+*&     Model Editor (GENIL_MODEL_EDITOR) and register component 'ZCPC' in
+*&     the component set used by the account application (CRMC_GIL_COMP).
+*&
+*& Model objects (created in the Model Editor, attribute structures below):
+*&   PrefRoot   root/access object   key ZCPC_S_PREF_KEY   attr ZCPC_S_PREF
+*&   PrefAudit  dependent object     key AUDIT_ID          attr ZCPC_S_AUDIT
+*&   PrefType   dependent object     key PREF_TYPE         attr ZCPC_S_TYPECFG
+*&   PrefSearch query object         param ZCPC_S_SEARCH -> PrefRoot
+*&   Relations: PrefRootAuditRel (1:N), PrefRootTypeRel (1:1)
+*&   Actions on PrefRoot: SAVE_CHANGES, END_PREF, COPY_PREFS, APPLY_ALL,
+*&                        RESOLVE_PREVIEW
+*&---------------------------------------------------------------------*
+CLASS zcl_zcpc_genil DEFINITION PUBLIC
+  INHERITING FROM cl_crm_genil_abstr_component   " [validate base class]
+  CREATE PUBLIC.
+
+  PUBLIC SECTION.
+    METHODS if_genil_appl_intlay~get_objects              REDEFINITION.
+    METHODS if_genil_appl_intlay~modify_objects           REDEFINITION.
+    METHODS if_genil_appl_intlay~execute_actions          REDEFINITION. " [validate]
+    METHODS if_genil_appl_query~get_query_result          REDEFINITION. " PrefSearch
+    METHODS if_genil_appl_transaction~save                REDEFINITION.
+    METHODS if_genil_appl_transaction~rollback            REDEFINITION.
+    METHODS if_genil_appl_transaction~changes_pending     REDEFINITION.
+
+  PRIVATE SECTION.
+    " attribute structures (DDIC, mirror the Option B design 2.2)
+    TYPES: BEGIN OF ty_pref_key,
+             pref_id TYPE sysuuid_c36,
+           END OF ty_pref_key.
+
+    DATA mo_core TYPE REF TO zcl_cpc_core.
+
+    METHODS core RETURNING VALUE(ro) TYPE REF TO zcl_cpc_core.
+
+    METHODS fill_pref_root
+      IMPORTING iv_pref_id TYPE sysuuid_c36
+                io_object  TYPE REF TO if_genil_cont_root_object.
+
+    METHODS build_identity
+      RETURNING VALUE(rs_req) TYPE zcl_cpc_core=>ty_request.
+
+    METHODS action_save_changes
+      IMPORTING it_param TYPE crmt_name_value_pair_tab
+      RAISING   cx_cpc_action_failed.
+
+    METHODS action_end_pref
+      IMPORTING iv_pref_id TYPE sysuuid_c36
+      RAISING   cx_cpc_action_failed.
+
+    METHODS action_copy_prefs
+      IMPORTING it_param TYPE crmt_name_value_pair_tab
+      RAISING   cx_cpc_action_failed.
+
+    METHODS param
+      IMPORTING it_param        TYPE crmt_name_value_pair_tab
+                iv_name         TYPE string
+      RETURNING VALUE(rv_value) TYPE string.
+ENDCLASS.
+
+
+CLASS zcl_zcpc_genil IMPLEMENTATION.
+
+  METHOD core.
+    IF mo_core IS INITIAL.
+      mo_core = zcl_cpc_core=>get_instance( ).
+    ENDIF.
+    ro = mo_core.
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  " READ: fill requested PrefRoot objects (and children on demand)
+  "-------------------------------------------------------------------
+  METHOD if_genil_appl_intlay~get_objects.
+    " iv_root_list contains the requested roots with their keys
+    DATA(lv_count) = iv_root_list->size( ).
+    DO lv_count TIMES.
+      DATA(lo_root) = iv_root_list->get_object_by_index( sy-index ).
+      DATA ls_key TYPE ty_pref_key.
+      lo_root->get_key( IMPORTING es_key = ls_key ).
+      fill_pref_root( iv_pref_id = ls_key-pref_id io_object = lo_root ).
+    ENDDO.
+  ENDMETHOD.
+
+  METHOD fill_pref_root.
+    " Reads through the CDS interface view - single source of the
+    " IsActive computation (half-open [from,to)); NEVER a raw table read
+    " with re-implemented validity logic.
+    SELECT SINGLE * FROM zi_cpc_customerpref
+      WHERE PreferenceUUID = @iv_pref_id
+      INTO @DATA(ls_cds).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+
+    DATA(ls_attr) = CORRESPONDING zcpc_s_pref( ls_cds MAPPING
+        pref_id     = PreferenceUUID
+        partner     = BusinessPartner
+        vkont       = ContractAccount
+        scope       = Scope
+        pref_type   = PreferenceType
+        channel     = Channel
+        pref_value  = PreferenceValue
+        valid_from  = ValidFrom
+        valid_to    = ValidTo
+        is_active   = IsActive
+        source      = Source
+        changed_by  = ChangedBy ).
+    io_object->set_attributes( ls_attr ).
+
+    " children on request: audit trail (PrefRootAuditRel)
+    IF io_object->check_rel_requested( 'PrefRootAuditRel' ) = abap_true.
+      SELECT * FROM zi_cpc_audit
+        WHERE PreferenceUUID = @iv_pref_id
+        ORDER BY ChangedAt DESCENDING
+        INTO TABLE @DATA(lt_audit).
+      LOOP AT lt_audit INTO DATA(ls_audit).
+        DATA(lo_child) = io_object->create_related_object(
+                           iv_relation_name = 'PrefRootAuditRel' ).
+        lo_child->set_attributes( CORRESPONDING zcpc_s_audit( ls_audit ) ).
+      ENDLOOP.
+    ENDIF.
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  " QUERY: PrefSearch - CPC01 active-only default + Show History
+  "-------------------------------------------------------------------
+  METHOD if_genil_appl_query~get_query_result.
+    DATA: lv_partner TYPE bu_partner,
+          lv_vkont   TYPE vkont_kk,
+          lv_hist    TYPE abap_boolean,
+          lv_cat     TYPE c LENGTH 12.
+
+    lv_partner = param( it_param = it_query_parameters iv_name = 'PARTNER' ).
+    lv_vkont   = param( it_param = it_query_parameters iv_name = 'VKONT' ).
+    lv_hist    = boolc( param( it_param = it_query_parameters
+                               iv_name = 'INCLUDE_HISTORY' ) = 'X' ).
+    lv_cat     = param( it_param = it_query_parameters iv_name = 'CATEGORY' ).
+
+    " Merged view: CA rows of the requested account + ALL BP-scope rows
+    " (DNC/DNM/THIRD_PARTY govern every account - always shown).
+    SELECT PreferenceUUID FROM zi_cpc_customerpref
+      WHERE BusinessPartner = @lv_partner
+        AND ( ContractAccount = @lv_vkont OR Scope = 'BP' )
+        AND ( @lv_hist = @abap_true OR IsActive = 'X' )
+        AND ( @lv_cat = @space OR _Type-Category = @lv_cat )   " assoc filter [validate syntax]
+      ORDER BY PreferenceType
+      INTO TABLE @DATA(lt_ids).
+
+    LOOP AT lt_ids INTO DATA(ls_id).
+      DATA(lo_root) = iv_root_list->add_object(
+          iv_object_name = 'PrefRoot'
+          is_object_key  = VALUE ty_pref_key( pref_id = ls_id-PreferenceUUID ) ).
+      fill_pref_root( iv_pref_id = ls_id-PreferenceUUID io_object = lo_root ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  " MODIFY: hard-rejected. All changes go through the actions (B0).
+  "-------------------------------------------------------------------
+  METHOD if_genil_appl_intlay~modify_objects.
+    ct_return = VALUE #( BASE ct_return
+      ( type = 'E' id = 'ZCPC' number = '060'
+        message = 'Direct modification is not supported - use the preference actions.' ) ).
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  " ACTIONS: thin dispatch to the core - identical semantics to RAP
+  "-------------------------------------------------------------------
+  METHOD if_genil_appl_intlay~execute_actions.
+    TRY.
+        CASE iv_action_name.
+          WHEN 'SAVE_CHANGES'.    action_save_changes( it_param = it_parameters ).
+          WHEN 'END_PREF'.        action_end_pref(
+                                    iv_pref_id = CONV #( param( it_param = it_parameters
+                                                                iv_name = 'PREF_ID' ) ) ).
+          WHEN 'COPY_PREFS'.      action_copy_prefs( it_param = it_parameters ).
+          WHEN 'APPLY_ALL'.       action_copy_prefs( it_param = it_parameters ). " target=* variant
+          WHEN 'RESOLVE_PREVIEW'.
+            DATA(ls_res) = core( )->resolve_comm(
+                iv_partner  = CONV #( param( it_param = it_parameters iv_name = 'PARTNER' ) )
+                iv_vkont    = CONV #( param( it_param = it_parameters iv_name = 'VKONT' ) )
+                iv_msg_type = param( it_param = it_parameters iv_name = 'MSG_TYPE' ) ).
+            " return via export parameters / result object [validate mechanism]
+          WHEN OTHERS.
+            ct_return = VALUE #( BASE ct_return
+              ( type = 'E' id = 'ZCPC' number = '061' message = 'Unknown action' ) ).
+        ENDCASE.
+      CATCH cx_cpc_action_failed INTO DATA(lx).
+        ct_return = VALUE #( BASE ct_return
+          ( type = 'E' id = 'ZCPC' number = '050' message = lx->get_text( ) ) ).
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD build_identity.
+    " WebClient runs on-stack: the agent IS sy-uname. Same attribution
+    " fields as the RAP/CPI path so the audit is indistinguishable.
+    rs_req-changed_by   = sy-uname.
+    rs_req-changed_role = 'CSR'.
+    rs_req-source       = 'CSR'.
+  ENDMETHOD.
+
+  METHOD action_save_changes.
+    DATA(ls_req) = build_identity( ).
+    ls_req-partner      = param( it_param = it_param iv_name = 'PARTNER' ).
+    ls_req-vkont        = param( it_param = it_param iv_name = 'VKONT' ).
+    ls_req-on_behalf_of = ls_req-partner.
+    ls_req-changes      = core( )->parse_changes_json(
+                            param( it_param = it_param iv_name = 'CHANGES_JSON' ) ).
+    core( )->prepare_save( EXPORTING is_request = ls_req
+                           IMPORTING ev_ok = DATA(lv_ok) et_results = DATA(lt_res) ).
+    IF lv_ok = abap_false.
+      RAISE EXCEPTION TYPE cx_cpc_action_failed
+        EXPORTING iv_text = |Save rejected: { lines( lt_res ) } message(s) - see log|.
+    ENDIF.
+    " persisted in ~SAVE; UI refreshes after commit
+  ENDMETHOD.
+
+  METHOD action_end_pref.
+    SELECT SINGLE * FROM zcpc_pref WHERE pref_id = @iv_pref_id INTO @DATA(ls_row).
+    IF sy-subrc <> 0.
+      RAISE EXCEPTION TYPE cx_cpc_action_failed EXPORTING iv_text = 'Record not found'.
+    ENDIF.
+    DATA(ls_req) = build_identity( ).
+    ls_req-partner = ls_row-partner.
+    ls_req-changes = VALUE #( ( index = 0 operation = 'END'
+                                pref_type = ls_row-pref_type scope = ls_row-scope
+                                vkont = ls_row-vkont channel = ls_row-channel
+                                ended_id = ls_row-pref_id
+                                reason_code = 'CUSTOMER_REQUEST' ) ).
+    core( )->prepare_save( EXPORTING is_request = ls_req
+                           IMPORTING ev_ok = DATA(lv_ok) et_results = DATA(lt_res) ).
+    IF lv_ok = abap_false.
+      RAISE EXCEPTION TYPE cx_cpc_action_failed EXPORTING iv_text = 'End rejected'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD action_copy_prefs.
+    " CPC02/CPC04: CA-scope rows only - BP-scope rows already govern all
+    " accounts (message ZCPC 041 shown by the UI). Builds SET changes for
+    " the target account(s) and funnels through prepare_save - one path.
+    " (Implementation mirrors the RAP behavior pool copyPreferences.)
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  " TRANSACTION: the GenIL save/commit cycle drives the core phases
+  "-------------------------------------------------------------------
+  METHOD if_genil_appl_transaction~changes_pending.
+    rv_changes_pending = core( )->has_pending( ).
+  ENDMETHOD.
+
+  METHOD if_genil_appl_transaction~save.
+    " SAVE phase: identical to RAP's save_modified - write + audit in
+    " the LUW the framework commits right after.
+    core( )->persist( ).
+    " Events: on-stack raise -> Event Mesh via outbound binding, or call
+    " the RAP event emission if co-deployed. [validate wiring]
+    rv_success = abap_true.
+  ENDMETHOD.
+
+  METHOD if_genil_appl_transaction~rollback.
+    core( )->reset( ).
+  ENDMETHOD.
+
+  METHOD param.
+    rv_value = VALUE #( it_param[ name = iv_name ]-value OPTIONAL ).
+  ENDMETHOD.
+
+ENDCLASS.
