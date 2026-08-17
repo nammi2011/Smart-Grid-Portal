@@ -180,14 +180,116 @@ const ACTOR = isCSR ? { id: CTX.agent, name: CTX.agentName, role: 'CSR', src: 'C
 const API_BASE = ''; // e.g. 'https://api.svgbs.com/api/v1' — empty = demo mode
 
 //---- Demo master data -------------------------------------------------------
+// Multiple mock customers, keyed by Business Partner number. The bp URL parameter
+// selects the profile, so the Service Cloud mashup binding visibly changes the data.
+// Unknown BP → falls back to the first profile but displays the passed numbers.
+const PROFILES = {
+  '0000100045': {
+    name: 'Alex Johnson', kind: 'Residential',
+    premise: '123 Green Street, Springfield IL 62704',
+    email: 'alex.johnson@example.com', mobile: '+1-555-0142', phone: '+1-555-0177',
+    contracts: [
+      { ca: '200045678', addr: '123 Green Street, Springfield', div: 'Electric' },
+      { ca: '200045679', addr: '48 Oak Avenue Unit 2, Springfield', div: 'Electric' },
+    ],
+    // EV owner, engaged customer, ON the Do-Not-Call list (CSR entry)
+    seeds: [
+      ['PAPERLESS','EMAIL','IN','2024-03-11',null,'PORTAL'],
+      ['BILL_READY','EMAIL','IN','2024-03-11',null,'PORTAL'],
+      ['PAY_REMIND','SMS','IN','2025-01-20',null,'CSR'],
+      ['PAST_DUE','EMAIL','IN','2024-03-11',null,'MIGRATION'],
+      ['OUT_DETECT','SMS','IN','2024-06-02',null,'OMS'],
+      ['OUT_ETR','SMS','IN','2024-06-02',null,'OMS'],
+      ['OUT_RESTORE','SMS','IN','2024-06-02',null,'OMS'],
+      ['OUT_PLANNED','EMAIL','IN','2024-06-02',null,'OMS'],
+      ['HIGH_USAGE','EMAIL','IN','2025-04-18',null,'PORTAL'],
+      ['BILL_PROJ','EMAIL','IN','2025-04-18',null,'PORTAL'],
+      ['DR_EVENT','SMS','IN','2025-07-01',null,'DRMS'],
+      ['EE_OFFER','EMAIL','IN','2024-03-11',null,'PORTAL'],
+      ['EV_PROGRAM','EMAIL','IN','2025-07-01',null,'DRMS'],
+      ['AMI_CONSENT','ALL','IN','2024-03-11',null,'PORTAL'],
+      ['DNC','VOICE','IN','2026-01-15',null,'CSR'],
+      ['PARTNER','EMAIL','OUT','2026-01-15',null,'CSR'],
+      // history (ended) examples for CPC01
+      ['BILL_READY','SMS','IN','2024-03-11','2025-01-19','PORTAL'],
+      ['PARTNER','EMAIL','IN','2024-03-11','2026-01-14','MIGRATION'],
+      ['OUT_CREW','SMS','IN','2024-06-02','2025-11-30','OMS'],
+    ],
+  },
+  '0001000234': {
+    name: 'Maria Garcia', kind: 'Residential',
+    premise: '77 Lakeview Drive, Springfield IL 62703',
+    email: 'maria.garcia@example.com', mobile: '+1-555-0388', phone: '+1-555-0399',
+    contracts: [
+      { ca: '300012345', addr: '77 Lakeview Drive, Springfield', div: 'Electric' },
+      { ca: '300012346', addr: '9 Elm Court (rental), Springfield', div: 'Electric' },
+    ],
+    // Voice-friendly, marketing opted-IN, NOT on DNC — comm preview shows voice going out
+    seeds: [
+      ['BILL_READY','SMS','IN','2025-02-10',null,'PORTAL'],
+      ['PAY_CONFIRM','SMS','IN','2025-02-10',null,'PORTAL'],
+      ['PAY_REMIND','VOICE','IN','2025-02-10',null,'CSR'],
+      ['PAST_DUE','VOICE','IN','2025-02-10',null,'MIGRATION'],
+      ['OUT_DETECT','SMS','IN','2025-02-10',null,'OMS'],
+      ['OUT_RESTORE','SMS','IN','2025-02-10',null,'OMS'],
+      ['PARTNER','EMAIL','IN','2025-06-01',null,'PORTAL'],
+      ['RESEARCH','VOICE','IN','2025-06-01',null,'PORTAL'],
+      ['AMI_CONSENT','ALL','IN','2025-02-10',null,'PORTAL'],
+      // ended paperless — she switched back to paper bills
+      ['PAPERLESS','EMAIL','IN','2025-02-10','2025-09-30','PORTAL'],
+    ],
+  },
+  '0001000567': {
+    name: 'David Chen', kind: 'Residential',
+    premise: '410 Birch Street Apt 12, Springfield IL 62702',
+    email: 'd.chen@example.com', mobile: '+1-555-0771', phone: '+1-555-0772',
+    contracts: [
+      { ca: '300067890', addr: '410 Birch Street Apt 12, Springfield', div: 'Electric' },
+    ],
+    // Privacy-maximal: DNC + DNM + third-party refusal — comm preview shows heavy suppression
+    seeds: [
+      ['PAPERLESS','EMAIL','IN','2024-11-05',null,'PORTAL'],
+      ['BILL_READY','EMAIL','IN','2024-11-05',null,'PORTAL'],
+      ['PAST_DUE','EMAIL','IN','2024-11-05',null,'MIGRATION'],
+      ['OUT_DETECT','PUSH','IN','2024-11-05',null,'OMS'],
+      ['DNC','VOICE','IN','2024-11-05',null,'PORTAL'],
+      ['DNM','POST','IN','2024-11-05',null,'PORTAL'],
+      ['AMI_CONSENT','ALL','OUT','2025-03-12',null,'PORTAL'],
+      // history: he withdrew smart-meter consent
+      ['AMI_CONSENT','ALL','IN','2024-11-05','2025-03-11','PORTAL'],
+    ],
+  },
+  '0002000891': {
+    name: 'Riverside Bakery LLC', kind: 'Commercial',
+    premise: '1200 Industrial Parkway, Springfield IL 62707',
+    email: 'billing@riversidebakery.example', mobile: '+1-555-0904', phone: '+1-555-0905',
+    contracts: [
+      { ca: '400089123', addr: '1200 Industrial Parkway, Springfield', div: 'Electric' },
+    ],
+    // Commercial: operational notices on, peak-demand alert IN, all marketing out
+    seeds: [
+      ['PAPERLESS','EMAIL','IN','2023-08-01',null,'MIGRATION'],
+      ['BILL_READY','EMAIL','IN','2023-08-01',null,'MIGRATION'],
+      ['PAY_CONFIRM','EMAIL','IN','2023-08-01',null,'MIGRATION'],
+      ['PAST_DUE','EMAIL','IN','2023-08-01',null,'MIGRATION'],
+      ['OUT_DETECT','SMS','IN','2024-01-15',null,'OMS'],
+      ['OUT_PLANNED','EMAIL','IN','2024-01-15',null,'OMS'],
+      ['PEAK_DEMAND','EMAIL','IN','2025-05-20',null,'PORTAL'],
+      ['HIGH_USAGE','EMAIL','IN','2025-05-20',null,'PORTAL'],
+      ['PARTNER','EMAIL','OUT','2023-08-01',null,'MIGRATION'],
+      ['THIRD_PARTY','ALL','OUT','2023-08-01',null,'MIGRATION'],
+    ],
+  },
+};
+
+const PROFILE = PROFILES[CTX.bp] || PROFILES['0000100045'];
 const CUSTOMER = {
-  bp: CTX.bp, name: 'Alex Johnson', ca: CTX.ca,
-  premise: '123 Green Street, Springfield IL 62704',
-  email: 'alex.johnson@example.com', mobile: '+1-555-0142', phone: '+1-555-0177',
-  contracts: [
-    { ca: '200045678', addr: '123 Green Street, Springfield', div: 'Electric' },
-    { ca: '200045679', addr: '48 Oak Avenue Unit 2, Springfield', div: 'Electric' },
-  ],
+  bp: CTX.bp,
+  name: PROFILE.name, kind: PROFILE.kind,
+  // use the passed CA when it belongs to this profile, else its first account
+  ca: PROFILE.contracts.some(c => c.ca === CTX.ca) ? CTX.ca : PROFILE.contracts[0].ca,
+  premise: PROFILE.premise, email: PROFILE.email, mobile: PROFILE.mobile, phone: PROFILE.phone,
+  contracts: PROFILE.contracts,
 };
 
 // Preference catalogue — category → types. Channels allowed per type.
@@ -242,28 +344,8 @@ const today = () => new Date().toISOString().slice(0,10);
 const uid = (p) => p + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
 
 //---- Preference records (validity-dated; ended, never deleted — CPC03) ------
-let RECORDS = [
-  rec('PAPERLESS','EMAIL','IN','2024-03-11',null,'PORTAL'),
-  rec('BILL_READY','EMAIL','IN','2024-03-11',null,'PORTAL'),
-  rec('PAY_REMIND','SMS','IN','2025-01-20',null,'CSR'),
-  rec('PAST_DUE','EMAIL','IN','2024-03-11',null,'MIGRATION'),
-  rec('OUT_DETECT','SMS','IN','2024-06-02',null,'OMS'),
-  rec('OUT_ETR','SMS','IN','2024-06-02',null,'OMS'),
-  rec('OUT_RESTORE','SMS','IN','2024-06-02',null,'OMS'),
-  rec('OUT_PLANNED','EMAIL','IN','2024-06-02',null,'OMS'),
-  rec('HIGH_USAGE','EMAIL','IN','2025-04-18',null,'PORTAL'),
-  rec('BILL_PROJ','EMAIL','IN','2025-04-18',null,'PORTAL'),
-  rec('DR_EVENT','SMS','IN','2025-07-01',null,'DRMS'),
-  rec('EE_OFFER','EMAIL','IN','2024-03-11',null,'PORTAL'),
-  rec('EV_PROGRAM','EMAIL','IN','2025-07-01',null,'DRMS'),
-  rec('AMI_CONSENT','ALL','IN','2024-03-11',null,'PORTAL'),
-  rec('DNC','VOICE','IN','2026-01-15',null,'CSR'),          // customer IS on DNC
-  rec('PARTNER','EMAIL','OUT','2026-01-15',null,'CSR'),
-  // historical / ended examples (CPC01 history view)
-  rec('BILL_READY','SMS','IN','2024-03-11','2025-01-19','PORTAL'),
-  rec('PARTNER','EMAIL','IN','2024-03-11','2026-01-14','MIGRATION'),
-  rec('OUT_CREW','SMS','IN','2024-06-02','2025-11-30','OMS'),
-];
+// Built from the selected customer profile's seed list.
+let RECORDS = PROFILE.seeds.map(s => rec(s[0], s[1], s[2], s[3], s[4], s[5]));
 function rec(type, ch, val, from, to, src){
   // BP-scoped preferences (DNC, DNM, third-party sharing) are keyed to the Business
   // Partner only — ca is null so they hold across every contract account.
@@ -479,6 +561,7 @@ function render(){
   <div class="ctx">
     <span class="mode-pill ${isCSR?'csr':'cust'}">${isCSR?'CSR — on behalf of':'My preferences'}</span>
     <span class="who">${esc(CUSTOMER.name)}</span>
+    <span class="tag n">${esc(CUSTOMER.kind)}</span>
     <span class="kv"><b>BP</b><span>${esc(CUSTOMER.bp)}</span></span>
     <span class="kv"><b>Contract acct</b><span>${esc(CUSTOMER.ca)}</span></span>
     ${CTX.caseId?`<span class="kv"><b>Case</b><span>${esc(CTX.caseId)}</span></span>`:''}
