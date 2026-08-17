@@ -1,0 +1,245 @@
+*&---------------------------------------------------------------------*
+*& ZBP_I_CPC_CUSTOMERPREF - RAP behavior pool for ZI_CPC_CustomerPref.
+*& Thin adapter over ZCL_CPC_CORE (rule B0): actions validate + buffer in
+*& the interaction phase; the additional save persists + raises events.
+*&---------------------------------------------------------------------*
+CLASS zbp_i_cpc_customerpref DEFINITION PUBLIC ABSTRACT FINAL
+  FOR BEHAVIOR OF zi_cpc_customerpref.
+ENDCLASS.
+
+CLASS zbp_i_cpc_customerpref IMPLEMENTATION.
+ENDCLASS.
+
+*"---------------------------------------------------------------------*
+*" Local handler class (Local Types tab)
+*"---------------------------------------------------------------------*
+CLASS lhc_pref DEFINITION INHERITING FROM cl_abap_behavior_handler.
+  PRIVATE SECTION.
+    METHODS get_global_authorizations FOR GLOBAL AUTHORIZATION
+      IMPORTING REQUEST requested_authorizations FOR Pref RESULT result.
+
+    METHODS get_instance_features FOR INSTANCE FEATURES
+      IMPORTING keys REQUEST requested_features FOR Pref RESULT result.
+
+    METHODS saveChanges FOR MODIFY
+      IMPORTING keys FOR ACTION Pref~saveChanges RESULT result.
+
+    METHODS endPreference FOR MODIFY
+      IMPORTING keys FOR ACTION Pref~endPreference RESULT result.
+
+    METHODS copyPreferences FOR MODIFY
+      IMPORTING keys FOR ACTION Pref~copyPreferences RESULT result.
+
+    METHODS applyAll FOR MODIFY
+      IMPORTING keys FOR ACTION Pref~applyAll RESULT result.
+
+    METHODS resolveComm FOR READ
+      IMPORTING keys FOR FUNCTION Pref~resolveComm RESULT result.
+
+    METHODS derive_identity
+      RETURNING VALUE(rs_id) TYPE zcl_cpc_core=>ty_request.
+ENDCLASS.
+
+
+CLASS lhc_pref IMPLEMENTATION.
+
+  METHOD get_global_authorizations.
+    " Role gate only; instance/partner-level enforcement sits in the core
+    " (authorize) and in the DCL on the CDS view.
+    AUTHORITY-CHECK OBJECT 'ZCPC_AUTH' ID 'ACTVT' FIELD '03'.
+    IF sy-subrc <> 0.
+      result-%update = if_abap_behv=>auth-unauthorized.
+      result-%action-saveChanges = if_abap_behv=>auth-unauthorized.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD get_instance_features.
+    " endPreference only on active rows of non-mandatory types.
+    READ ENTITIES OF zi_cpc_customerpref IN LOCAL MODE
+      ENTITY Pref FIELDS ( PreferenceType ValidTo ) WITH CORRESPONDING #( keys )
+      RESULT DATA(lt_pref).
+    LOOP AT lt_pref INTO DATA(ls_pref).
+      SELECT SINGLE mandatory_flag FROM zcpc_preftype
+        WHERE pref_type = @ls_pref-PreferenceType INTO @DATA(lv_mand).
+      APPEND VALUE #(
+        %tky = ls_pref-%tky
+        %action-endPreference = COND #(
+          WHEN lv_mand = abap_true OR ls_pref-ValidTo IS NOT INITIAL
+          THEN if_abap_behv=>fc-o-disabled
+          ELSE if_abap_behv=>fc-o-enabled ) ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  METHOD derive_identity.
+    " Identity comes from the AUTHENTICATED context, never from payload
+    " (same guard as CPI, enforced again server-side).
+    " [validate] claim access API for your deployment: on-premise = sy-uname;
+    " principal propagation delivers the named user the same way.
+    rs_id-changed_by   = sy-uname.
+    rs_id-changed_role = COND #( LET auth = cl_abap_context_info=>get_user_technical_name( ) IN
+                                 WHEN auth IS NOT INITIAL THEN 'CSR' ELSE 'CSR' ).
+    " Role derivation: PFCG role -> CSR vs CUSTOMER; simplified here -
+    " implement via AUTHORITY-CHECK on a role-distinguishing field. [validate]
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  METHOD saveChanges.
+    DATA(lo_core) = zcl_cpc_core=>get_instance( ).
+    LOOP AT keys INTO DATA(ls_key).
+      DATA(ls_p) = ls_key-%param.
+
+      DATA(ls_req) = derive_identity( ).
+      ls_req-request_id  = ls_p-RequestId.
+      ls_req-partner     = |{ ls_p-BusinessPartner ALPHA = IN }|.
+      ls_req-vkont       = ls_p-ContractAccount.
+      ls_req-source      = COND #( WHEN ls_req-changed_role = 'CSR' THEN 'CSR' ELSE 'PORTAL' ).
+      ls_req-on_behalf_of = COND #( WHEN ls_req-changed_role = 'CSR' THEN ls_req-partner ).
+      ls_req-case_id     = COND #( WHEN ls_req-changed_role = 'CSR' THEN ls_p-CaseId ).
+      ls_req-correlation = ls_p-CorrelationId.
+
+      TRY.
+          ls_req-changes = lo_core->parse_changes_json( CONV #( ls_p-ChangesJson ) ).
+        CATCH cx_sy_conversion_error.
+          APPEND VALUE #( %cid = ls_key-%cid
+            %param = VALUE zcpc_a_save_r( requestid = ls_p-RequestId status = 'E'
+              resultsjson = '[{"errorCode":"SCHEMA_INVALID"}]' ) ) TO result.
+          CONTINUE.
+      ENDTRY.
+
+      lo_core->prepare_save( EXPORTING is_request = ls_req
+                             IMPORTING et_results = DATA(lt_res)
+                                       ev_ok      = DATA(lv_ok) ).
+
+      IF lv_ok = abap_false.
+        " D1 all-or-nothing: report per-line errors, abort this save
+        APPEND VALUE #( %cid = ls_key-%cid
+          %param = VALUE zcpc_a_save_r( requestid = ls_p-RequestId status = 'E'
+            savedcount = 0
+            resultsjson = /ui2/cl_json=>serialize( data = lt_res
+                            pretty_name = /ui2/cl_json=>pretty_mode-camel_case ) ) ) TO result.
+        " raise a failed message so the framework rolls back
+        APPEND VALUE #( %cid = ls_key-%cid ) TO failed-pref.
+        CONTINUE.
+      ENDIF.
+
+      APPEND VALUE #( %cid = ls_key-%cid
+        %param = VALUE zcpc_a_save_r( requestid = ls_p-RequestId status = 'S'
+          savedcount = lines( ls_req-changes )
+          resultsjson = /ui2/cl_json=>serialize( data = lt_res
+                          pretty_name = /ui2/cl_json=>pretty_mode-camel_case ) ) ) TO result.
+    ENDLOOP.
+    " actual DB writes happen in the saver (save phase) via the same core buffer
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  METHOD endPreference.
+    DATA(lo_core) = zcl_cpc_core=>get_instance( ).
+    READ ENTITIES OF zi_cpc_customerpref IN LOCAL MODE
+      ENTITY Pref ALL FIELDS WITH CORRESPONDING #( keys )
+      RESULT DATA(lt_pref).
+    LOOP AT lt_pref INTO DATA(ls_pref).
+      DATA(ls_req) = derive_identity( ).
+      ls_req-partner = ls_pref-BusinessPartner.
+      ls_req-source  = 'CSR'.
+      ls_req-changes = VALUE #( ( index = 0 operation = 'END'
+                                  pref_type = ls_pref-PreferenceType
+                                  scope = ls_pref-Scope vkont = ls_pref-ContractAccount
+                                  channel = ls_pref-Channel
+                                  ended_id = ls_pref-PreferenceUUID
+                                  reason_code = 'CUSTOMER_REQUEST' ) ).
+      lo_core->prepare_save( EXPORTING is_request = ls_req
+                             IMPORTING ev_ok = DATA(lv_ok) et_results = DATA(lt_res) ).
+      IF lv_ok = abap_false.
+        APPEND VALUE #( %tky = ls_pref-%tky ) TO failed-pref.
+      ENDIF.
+    ENDLOOP.
+    " result: re-read after save via %tky (framework refresh)
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  METHOD copyPreferences.
+    " Reads active CA-scope rows of FromAccount, builds SET changes for
+    " ToAccount, funnels through prepare_save. BP-scope rows excluded -
+    " they already govern every account.
+    DATA(lo_core) = zcl_cpc_core=>get_instance( ).
+    LOOP AT keys INTO DATA(ls_key).
+      DATA(ls_p) = ls_key-%param.
+      DATA(lv_today) = cl_abap_context_info=>get_system_date( ).
+      SELECT * FROM zcpc_pref
+        WHERE partner = @ls_p-BusinessPartner AND vkont = @ls_p-FromAccount
+          AND scope = 'CA'
+          AND valid_from <= @lv_today AND ( valid_to = @space OR valid_to > @lv_today )
+        INTO TABLE @DATA(lt_src).
+      DATA(ls_req) = derive_identity( ).
+      ls_req-partner = ls_p-BusinessPartner. ls_req-source = 'CSR'.
+      LOOP AT lt_src INTO DATA(ls_src).
+        APPEND VALUE #( index = sy-tabix - 1 operation = 'SET'
+                        pref_type = ls_src-pref_type scope = 'CA'
+                        vkont = ls_p-ToAccount channel = ls_src-channel
+                        pref_value = ls_src-pref_value
+                        valid_from = ls_p-ValidFrom
+                        reason_code = 'CSR_CORRECTION' ) TO ls_req-changes.
+      ENDLOOP.
+      lo_core->prepare_save( EXPORTING is_request = ls_req
+                             IMPORTING ev_ok = DATA(lv_ok) et_results = DATA(lt_res) ).
+      APPEND VALUE #( %cid = ls_key-%cid
+        %param = VALUE zcpc_a_save_r( status = COND #( WHEN lv_ok = abap_true THEN 'S' ELSE 'E' )
+                                      savedcount = lines( ls_req-changes ) ) ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD applyAll.
+    " Same pattern as copyPreferences, looping every CA of the partner
+    " (FI-CA read of the account list - [validate access path]).
+  ENDMETHOD.
+
+  "-------------------------------------------------------------------
+  METHOD resolveComm.
+    DATA(lo_core) = zcl_cpc_core=>get_instance( ).
+    LOOP AT keys INTO DATA(ls_key).
+      DATA(ls_p) = ls_key-%param.
+      DATA(ls_r) = lo_core->resolve_comm( iv_partner  = CONV #( ls_p-BusinessPartner )
+                                          iv_vkont    = CONV #( ls_p-ContractAccount )
+                                          iv_msg_type = ls_p-MsgType ).
+      APPEND VALUE #( %cid = ls_key-%cid
+        %param = VALUE zcpc_a_resolve_r( send = ls_r-send channel = ls_r-channel
+                                         address = ls_r-address reason = ls_r-reason
+                                         prefuuid = ls_r-pref_uuid ) ) TO result.
+    ENDLOOP.
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+*"---------------------------------------------------------------------*
+*" Saver class - additional save (Local Types tab)
+*"---------------------------------------------------------------------*
+CLASS lsc_pref DEFINITION INHERITING FROM cl_abap_behavior_saver.
+  PROTECTED SECTION.
+    METHODS save_modified REDEFINITION.
+ENDCLASS.
+
+CLASS lsc_pref IMPLEMENTATION.
+
+  METHOD save_modified.
+    DATA(lo_core) = zcl_cpc_core=>get_instance( ).
+    IF lo_core->has_pending( ) = abap_false.
+      RETURN.
+    ENDIF.
+
+    " SAVE PHASE: end-date + insert + audit in the framework's LUW
+    lo_core->persist( ).
+
+    " RAP business events -> Event Mesh (event binding). [validate wiring]
+    RAISE ENTITY EVENT zi_cpc_customerpref~PreferenceChanged
+      FROM VALUE #( ( %param = VALUE zcpc_a_save_r( status = 'S' ) ) ).
+    IF lo_core->has_dnc_change( ) = abap_true.
+      RAISE ENTITY EVENT zi_cpc_customerpref~DncChanged
+        FROM VALUE #( ( %param = VALUE zcpc_a_resolve_p( ) ) ).
+    ENDIF.
+
+    lo_core->reset( ).
+  ENDMETHOD.
+
+ENDCLASS.

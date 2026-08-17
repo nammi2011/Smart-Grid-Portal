@@ -1,0 +1,137 @@
+//=====================================================================
+// CPC - RAP behavior definitions + action parameter entities
+// Managed RAP with internal operations: external consumers can ONLY use
+// the actions; every write funnels through ZCL_CPC_CORE (rule B0).
+//=====================================================================
+
+//--------------------------------------------------- abstract entities
+// v1 pragmatic choice: the changes[] collection travels as a JSON string
+// (ChangesJson). Abstract entities cannot carry table components on all
+// releases, and CPI/the UI already produce exactly this JSON — so the
+// action signature stays release-proof and the mapping trivial.
+// [validate] If your release supports table-typed action parameters,
+// lift ChangesJson into a typed child entity in v2.
+
+@EndUserText.label: 'CPC saveChanges input'
+define abstract entity ZCPC_A_SAVE_P
+{
+  RequestId       : abap.char(36);
+  BusinessPartner : abap.char(10);
+  ContractAccount : abap.char(12);
+  Source          : abap.char(12);   // overwritten server-side from auth context
+  ChangedBy       : abap.char(40);   // overwritten server-side
+  ChangedByRole   : abap.char(10);   // overwritten server-side
+  OnBehalfOf      : abap.char(10);
+  CaseId          : abap.char(20);
+  CorrelationId   : abap.char(40);
+  ChangesJson     : abap.string;     // the changes[] array as JSON
+}
+
+@EndUserText.label: 'CPC saveChanges result'
+define abstract entity ZCPC_A_SAVE_R
+{
+  RequestId   : abap.char(36);
+  Status      : abap.char(1);        // S success / E error (D1: never partial)
+  SavedCount  : abap.int4;
+  ResultsJson : abap.string;         // per-change results [{index,status,newRecordId,errorCode,message}]
+}
+
+@EndUserText.label: 'CPC copyPreferences input'
+define abstract entity ZCPC_A_COPY_P
+{
+  BusinessPartner : abap.char(10);
+  FromAccount     : abap.char(12);
+  ToAccount       : abap.char(12);
+  ValidFrom       : abap.dats;
+}
+
+@EndUserText.label: 'CPC applyAll input'
+define abstract entity ZCPC_A_APPLY_P
+{
+  BusinessPartner : abap.char(10);
+  SourceAccount   : abap.char(12);
+}
+
+@EndUserText.label: 'CPC resolveComm input'
+define abstract entity ZCPC_A_RESOLVE_P
+{
+  BusinessPartner : abap.char(10);
+  ContractAccount : abap.char(12);
+  MsgType         : abap.char(20);
+  EventId         : abap.char(40);
+}
+
+@EndUserText.label: 'CPC resolveComm result'
+define abstract entity ZCPC_A_RESOLVE_R
+{
+  Send      : abap_boolean;
+  Channel   : abap.char(10);
+  Address   : abap.char(241);
+  Reason    : abap.char(24);
+  PrefUUID  : abap.char(36);
+  FirstName : abap.char(40);
+}
+
+//--------------------------------------------------- base behavior (ZI)
+managed implementation in class zbp_i_cpc_customerpref unique;
+strict ( 2 );
+with additional save   // audit rows + event raise happen in the save sequence
+
+define behavior for ZI_CPC_CustomerPref alias Pref
+persistent table zcpc_pref
+lock master
+authorization master ( global )
+etag master ChangedAt
+{
+  // Only the behavior pool itself may create/update rows (end-date pattern).
+  // No public update, NO delete anywhere: records are end-dated, never removed (CPC03).
+  internal create;
+  internal update;
+
+  field ( readonly ) PreferenceUUID, ChangedAt, ChangedBy, Source;
+  field ( numbering : managed ) PreferenceUUID;
+
+  // --- the public write surface -------------------------------------
+  static action saveChanges     parameter ZCPC_A_SAVE_P    result [1] ZCPC_A_SAVE_R;
+  action ( features : instance ) endPreference              result [1] $self;
+  static action copyPreferences parameter ZCPC_A_COPY_P    result [1] ZCPC_A_SAVE_R;
+  static action applyAll        parameter ZCPC_A_APPLY_P   result [1] ZCPC_A_SAVE_R;
+  static function resolveComm   parameter ZCPC_A_RESOLVE_P result [1] ZCPC_A_RESOLVE_R;
+
+  // --- business events (RAP events -> Event Mesh via event binding) --
+  // [validate] RAP entity events + event binding availability per release;
+  // fallback: outbound emit from the saver via a destination.
+  event PreferenceChanged parameter ZCPC_A_SAVE_R;
+  event DncChanged        parameter ZCPC_A_RESOLVE_P;
+
+  mapping for zcpc_pref
+    { PreferenceUUID = pref_id;      BusinessPartner = partner;
+      ContractAccount = vkont;       Scope = scope;
+      PreferenceType = pref_type;    Channel = channel;
+      PreferenceValue = pref_value;  ValidFrom = valid_from;
+      ValidTo = valid_to;            Source = source;
+      ChangedBy = changed_by;        CaseID = case_id;
+      ChangedAt = changed_at; }
+}
+
+//--------------------------------------------------- projection (ZC)
+projection;
+strict ( 2 );
+
+define behavior for ZC_CPC_CustomerPref alias PrefP
+{
+  use action saveChanges;
+  use action endPreference;
+  use action copyPreferences;
+  use action applyAll;
+  use function resolveComm;
+}
+
+//--------------------------------------------------- service (recap)
+// define service ZUI_CPC_PREF {
+//   expose ZC_CPC_CustomerPref as Preferences;
+//   expose ZI_CPC_PrefType     as PreferenceTypes;
+//   expose ZI_CPC_Audit        as AuditLog;
+// }
+// Binding: OData V4 - UI + Web API, published. The action URLs in the CPI
+// parameter files point at this binding's /saveChanges, /resolveComm etc.

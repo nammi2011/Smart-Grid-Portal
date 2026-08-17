@@ -1,0 +1,431 @@
+*&---------------------------------------------------------------------*
+*& ZCL_CPC_CORE - the ONLY writer of ZCPC_PREF / ZCPC_AUDIT (rule B0).
+*& Called by: RAP behavior pool (Option A) and GenIL adapter (Option B).
+*&
+*& Phase model (RAP strict(2)): actions run in the INTERACTION phase and
+*& only VALIDATE + BUFFER here (prepare_save). The SAVE phase (behavior
+*& pool's additional save) calls PERSIST, which writes tables in the same
+*& LUW the framework commits. No COMMIT WORK anywhere in this class.
+*&
+*& BRFplus: functions are resolved by GUID from ZCPC_BRF_CFG. When a GUID
+*& is configured the FDT call is authoritative; otherwise the NATIVE_*
+*& methods implement the identical logic (mirrors rulesets RS_VALIDATE /
+*& RS_COMM in the build guide) so the core works before BRF go-live.
+*& [validate] FDT API signatures against your release.
+*&---------------------------------------------------------------------*
+CLASS zcl_cpc_core DEFINITION PUBLIC FINAL CREATE PRIVATE.
+
+  PUBLIC SECTION.
+    TYPES: BEGIN OF ty_change,
+             index       TYPE i,
+             operation   TYPE c LENGTH 8,    " SET / REPLACE / END
+             pref_type   TYPE c LENGTH 20,
+             scope       TYPE c LENGTH 2,    " BP / CA
+             vkont       TYPE vkont_kk,
+             channel     TYPE c LENGTH 10,
+             pref_value  TYPE c LENGTH 3,    " IN / OUT
+             valid_from  TYPE dats,
+             ended_id    TYPE sysuuid_c36,   " endedRecordId (REPLACE/END)
+             reason_code TYPE c LENGTH 20,
+           END OF ty_change,
+           ty_changes TYPE STANDARD TABLE OF ty_change WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_request,
+             request_id   TYPE c LENGTH 36,
+             partner      TYPE bu_partner,
+             vkont        TYPE vkont_kk,
+             source       TYPE c LENGTH 12,
+             changed_by   TYPE c LENGTH 40,
+             changed_role TYPE c LENGTH 10,
+             on_behalf_of TYPE bu_partner,
+             case_id      TYPE c LENGTH 20,
+             correlation  TYPE c LENGTH 40,
+             changes      TYPE ty_changes,
+           END OF ty_request.
+
+    TYPES: BEGIN OF ty_result_line,
+             index     TYPE i,
+             status    TYPE c LENGTH 1,      " S / E
+             new_id    TYPE sysuuid_c36,
+             errorcode TYPE c LENGTH 30,
+             message   TYPE string,
+           END OF ty_result_line,
+           ty_result_lines TYPE STANDARD TABLE OF ty_result_line WITH EMPTY KEY.
+
+    TYPES: BEGIN OF ty_resolve,
+             send      TYPE abap_boolean,
+             channel   TYPE c LENGTH 10,
+             address   TYPE c LENGTH 241,
+             reason    TYPE c LENGTH 24,
+             pref_uuid TYPE sysuuid_c36,
+           END OF ty_resolve.
+
+    CLASS-METHODS get_instance RETURNING VALUE(ro_core) TYPE REF TO zcl_cpc_core.
+
+    "-- interaction phase: parse + authorize + validate + buffer ---------
+    METHODS prepare_save
+      IMPORTING is_request        TYPE ty_request
+      EXPORTING et_results        TYPE ty_result_lines
+                ev_ok             TYPE abap_boolean.
+
+    "-- interaction phase helpers ---------------------------------------
+    METHODS parse_changes_json
+      IMPORTING iv_json           TYPE string
+      RETURNING VALUE(rt_changes) TYPE ty_changes
+      RAISING   cx_sy_conversion_error.
+
+    METHODS resolve_comm
+      IMPORTING iv_partner        TYPE bu_partner
+                iv_vkont          TYPE vkont_kk OPTIONAL
+                iv_msg_type       TYPE clike
+      RETURNING VALUE(rs_result)  TYPE ty_resolve.
+
+    "-- save phase: called from the behavior pool's additional save ------
+    METHODS persist
+      IMPORTING iv_simulate TYPE abap_boolean DEFAULT abap_false.
+
+    METHODS has_pending RETURNING VALUE(rv_yes) TYPE abap_boolean.
+    METHODS has_dnc_change RETURNING VALUE(rv_yes) TYPE abap_boolean.
+    METHODS reset.
+
+  PRIVATE SECTION.
+    CONSTANTS: c_scope_bp TYPE c LENGTH 2 VALUE 'BP',
+               c_scope_ca TYPE c LENGTH 2 VALUE 'CA'.
+
+    CLASS-DATA go_instance TYPE REF TO zcl_cpc_core.
+
+    DATA: mt_new_rows   TYPE STANDARD TABLE OF zcpc_pref  WITH EMPTY KEY,
+          mt_end_rows   TYPE STANDARD TABLE OF zcpc_pref  WITH EMPTY KEY, " images w/ new valid_to
+          mt_audit_rows TYPE STANDARD TABLE OF zcpc_audit WITH EMPTY KEY,
+          mv_dnc_touched TYPE abap_boolean.
+
+    METHODS authorize
+      IMPORTING is_request TYPE ty_request
+      RAISING   cx_cpc_not_authorized.                       " custom exception class
+
+    METHODS native_validate
+      IMPORTING is_request TYPE ty_request
+      CHANGING  ct_results TYPE ty_result_lines.
+
+    METHODS read_active
+      IMPORTING iv_partner       TYPE bu_partner
+                iv_pref_type     TYPE clike
+                iv_vkont         TYPE vkont_kk
+                iv_scope         TYPE clike
+      RETURNING VALUE(rs_row)    TYPE zcpc_pref.
+
+    METHODS read_typecfg
+      IMPORTING iv_pref_type     TYPE clike
+      RETURNING VALUE(rs_cfg)    TYPE zcpc_preftype.
+
+    METHODS brf_guid
+      IMPORTING iv_key           TYPE clike
+      RETURNING VALUE(rv_guid)   TYPE if_fdt_types=>id.       " initial = not configured
+ENDCLASS.
+
+
+CLASS zcl_cpc_core IMPLEMENTATION.
+
+  METHOD get_instance.
+    IF go_instance IS INITIAL.
+      go_instance = NEW #( ).
+    ENDIF.
+    ro_core = go_instance.
+  ENDMETHOD.
+
+  METHOD reset.
+    CLEAR: mt_new_rows, mt_end_rows, mt_audit_rows, mv_dnc_touched.
+  ENDMETHOD.
+
+  METHOD has_pending.
+    rv_yes = xsdbool( mt_new_rows IS NOT INITIAL OR mt_end_rows IS NOT INITIAL ).
+  ENDMETHOD.
+
+  METHOD has_dnc_change.
+    rv_yes = mv_dnc_touched.
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD parse_changes_json.
+    " /ui2/cl_json is broadly available; xco_cp_json on newer releases [validate]
+    DATA lt_raw TYPE ty_changes.
+    /ui2/cl_json=>deserialize( EXPORTING json        = iv_json
+                                          pretty_name = /ui2/cl_json=>pretty_mode-camel_case
+                               CHANGING  data        = lt_raw ).
+    LOOP AT lt_raw ASSIGNING FIELD-SYMBOL(<c>).
+      <c>-index = sy-tabix - 1.                       " 0-based like the API
+      <c>-pref_type = to_upper( <c>-pref_type ).
+      <c>-channel   = to_upper( <c>-channel ).
+      IF <c>-reason_code IS INITIAL.
+        <c>-reason_code = 'CUSTOMER_REQUEST'.
+      ENDIF.
+    ENDLOOP.
+    rt_changes = lt_raw.
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD prepare_save.
+    CLEAR: et_results. ev_ok = abap_false.
+    reset( ).
+
+    TRY.
+        authorize( is_request ).
+      CATCH cx_cpc_not_authorized.
+        APPEND VALUE #( index = -1 status = 'E'
+                        errorcode = 'FOREIGN_PARTNER'
+                        message = 'Not authorized for this business partner.' ) TO et_results.
+        RETURN.
+    ENDTRY.
+
+    " ---- validation: BRFplus when configured, native mirror otherwise --
+    DATA(lv_fn) = brf_guid( 'FN_VALIDATE_CHANGE' ).
+    IF lv_fn IS NOT INITIAL.
+      " [validate] FDT context/result marshalling per build guide step 9;
+      " on any FDT exception fall back to native validation (fail-safe).
+      TRY.
+          " ... cl_fdt_function_process=>process( ... )  -> et_results
+        CATCH cx_fdt INTO DATA(lx_fdt).
+          native_validate( EXPORTING is_request = is_request CHANGING ct_results = et_results ).
+      ENDTRY.
+    ELSE.
+      native_validate( EXPORTING is_request = is_request CHANGING ct_results = et_results ).
+    ENDIF.
+
+    IF line_exists( et_results[ status = 'E' ] ).
+      RETURN.                                        " D1: any error -> nothing saved
+    ENDIF.
+
+    " ---- build row images (end-date + insert), audit rows --------------
+    GET TIME STAMP FIELD DATA(lv_ts).
+    DATA(lv_today) = cl_abap_context_info=>get_system_date( ).
+
+    LOOP AT is_request-changes ASSIGNING FIELD-SYMBOL(<ch>).
+      DATA(ls_cfg) = read_typecfg( <ch>-pref_type ).
+      DATA(lv_vkont) = COND vkont_kk( WHEN <ch>-scope = c_scope_bp THEN space
+                                      ELSE <ch>-vkont ).
+      DATA ls_old TYPE zcpc_pref.
+      CLEAR ls_old.
+
+      IF <ch>-operation = 'REPLACE' OR <ch>-operation = 'END'.
+        SELECT SINGLE * FROM zcpc_pref INTO @ls_old
+          WHERE pref_id = @<ch>-ended_id AND partner = @is_request-partner.
+        IF sy-subrc <> 0.
+          APPEND VALUE #( index = <ch>-index status = 'E'
+                          errorcode = 'RECORD_NOT_FOUND'
+                          message = 'The record to replace/end was not found.' ) TO et_results.
+          CONTINUE.
+        ENDIF.
+        " half-open convention: old row stops the day the new one starts
+        ls_old-valid_to = COND dats( WHEN <ch>-operation = 'REPLACE'
+                                     THEN <ch>-valid_from ELSE lv_today ).
+        APPEND ls_old TO mt_end_rows.
+      ENDIF.
+
+      IF <ch>-operation = 'SET' OR <ch>-operation = 'REPLACE'.
+        DATA(ls_new) = VALUE zcpc_pref(
+            pref_id    = cl_system_uuid=>create_uuid_c36_static( )
+            partner    = is_request-partner
+            vkont      = lv_vkont
+            scope      = <ch>-scope
+            pref_type  = <ch>-pref_type
+            channel    = <ch>-channel
+            pref_value = <ch>-pref_value
+            valid_from = <ch>-valid_from
+            valid_to   = ''                      " open-ended
+            source     = is_request-source
+            changed_by = is_request-changed_by
+            case_id    = is_request-case_id
+            changed_at = lv_ts ).
+        APPEND ls_new TO mt_new_rows.
+        APPEND VALUE #( index = <ch>-index status = 'S' new_id = ls_new-pref_id ) TO et_results.
+      ELSE.
+        APPEND VALUE #( index = <ch>-index status = 'S' ) TO et_results.
+      ENDIF.
+
+      APPEND VALUE zcpc_audit(
+          audit_id       = cl_system_uuid=>create_uuid_c36_static( )
+          pref_id        = COND #( WHEN ls_old-pref_id IS NOT INITIAL
+                                   THEN ls_old-pref_id ELSE ls_new-pref_id )
+          partner        = is_request-partner
+          vkont          = lv_vkont
+          action         = <ch>-operation
+          prev_value     = COND #( WHEN ls_old IS NOT INITIAL
+                                   THEN |{ ls_old-pref_value }/{ ls_old-channel }| )
+          new_value      = COND #( WHEN <ch>-operation = 'END' THEN 'ENDED'
+                                   ELSE |{ <ch>-pref_value }/{ <ch>-channel }| )
+          source         = is_request-source
+          changed_by     = is_request-changed_by
+          changed_by_role = is_request-changed_role
+          on_behalf_of   = is_request-on_behalf_of
+          reason_code    = <ch>-reason_code
+          correlation_id = is_request-correlation
+          ts             = lv_ts ) TO mt_audit_rows.
+
+      IF <ch>-pref_type = 'DNC' OR <ch>-pref_type = 'DNM'.
+        mv_dnc_touched = abap_true.
+      ENDIF.
+    ENDLOOP.
+
+    ev_ok = xsdbool( NOT line_exists( et_results[ status = 'E' ] ) ).
+    IF ev_ok = abap_false.
+      reset( ).                                     " D1: partial images discarded
+    ENDIF.
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD persist.
+    " SAVE PHASE ONLY. The RAP framework owns the commit.
+    IF iv_simulate = abap_true. RETURN. ENDIF.
+    IF mt_end_rows IS NOT INITIAL.
+      UPDATE zcpc_pref FROM TABLE @mt_end_rows.     " only valid_to changed
+    ENDIF.
+    IF mt_new_rows IS NOT INITIAL.
+      INSERT zcpc_pref FROM TABLE @mt_new_rows.
+    ENDIF.
+    IF mt_audit_rows IS NOT INITIAL.
+      INSERT zcpc_audit FROM TABLE @mt_audit_rows.  " insert-only, same LUW
+    ENDIF.
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD native_validate.
+    " Mirror of ruleset RS_VALIDATE (build guide 7.2) - single source of
+    " truth for the rules is BRFplus once live; keep both in sync.
+    DATA(lv_today) = cl_abap_context_info=>get_system_date( ).
+    LOOP AT is_request-changes ASSIGNING FIELD-SYMBOL(<ch>).
+      DATA(ls_cfg) = read_typecfg( <ch>-pref_type ).
+      IF ls_cfg IS INITIAL.
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'UNKNOWN_TYPE'
+                        message = |Unknown preference type { <ch>-pref_type }| ) TO ct_results.
+        CONTINUE.
+      ENDIF.
+      IF ls_cfg-mandatory_flag = abap_true AND <ch>-pref_value = 'OUT'.
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'MANDATORY_OPTOUT'
+                        message = |Preference { <ch>-pref_type } is regulatory and cannot be opted out| ) TO ct_results.
+      ENDIF.
+      IF <ch>-channel IS NOT INITIAL
+         AND NOT ls_cfg-allowed_channels CS <ch>-channel.
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'CHANNEL_NOT_ALLOWED'
+                        message = |Channel { <ch>-channel } not allowed for { <ch>-pref_type }| ) TO ct_results.
+      ENDIF.
+      IF ls_cfg-scope = c_scope_bp AND <ch>-vkont IS NOT INITIAL.
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'SCOPE_CA_MISMATCH'
+                        message = 'BP-level preference must not carry a contract account' ) TO ct_results.
+      ELSEIF ls_cfg-scope = c_scope_ca AND <ch>-vkont IS INITIAL.
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'SCOPE_CA_MISMATCH'
+                        message = 'Contract account required for this preference' ) TO ct_results.
+      ENDIF.
+      IF <ch>-operation <> 'END'
+         AND ( <ch>-valid_from < lv_today - 30 OR <ch>-valid_from > lv_today + 365 ).
+        APPEND VALUE #( index = <ch>-index status = 'E' errorcode = 'INVALID_VALID_FROM'
+                        message = 'Effective date outside the allowed window' ) TO ct_results.
+      ENDIF.
+      " force scope from config (client cannot re-scope a type)
+      <ch>-scope = ls_cfg-scope.
+    ENDLOOP.
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD resolve_comm.
+    " Mirror of ruleset RS_COMM (build guide 7.1); BRF call when configured.
+    DATA(lv_today) = cl_abap_context_info=>get_system_date( ).
+    DATA(ls_cfg) = read_typecfg( iv_msg_type ).
+    IF ls_cfg IS INITIAL.
+      rs_result = VALUE #( send = abap_false reason = 'UNKNOWN_TYPE' ).
+      RETURN.
+    ENDIF.
+
+    DATA(ls_pref) = read_active( iv_partner   = iv_partner
+                                 iv_pref_type = iv_msg_type
+                                 iv_vkont     = iv_vkont
+                                 iv_scope     = ls_cfg-scope ).
+    DATA(lv_value)   = COND #( WHEN ls_pref IS INITIAL THEN ls_cfg-default_value
+                               ELSE ls_pref-pref_value ).
+    DATA(lv_channel) = COND #( WHEN ls_pref IS INITIAL THEN ls_cfg-default_channel
+                               ELSE ls_pref-channel ).
+    rs_result-pref_uuid = ls_pref-pref_id.
+
+    IF lv_value <> 'IN'.
+      rs_result-send = abap_false. rs_result-reason = 'OPTED_OUT'. RETURN.
+    ENDIF.
+
+    " DNC / DNM are BP-scope: read with empty vkont regardless of caller CA
+    DATA(ls_dnc) = read_active( iv_partner = iv_partner iv_pref_type = 'DNC'
+                                iv_vkont = space iv_scope = c_scope_bp ).
+    DATA(ls_dnm) = read_active( iv_partner = iv_partner iv_pref_type = 'DNM'
+                                iv_vkont = space iv_scope = c_scope_bp ).
+    DATA(lv_dnc) = xsdbool( ls_dnc-pref_value = 'IN' ).
+    DATA(lv_dnm) = xsdbool( ls_dnm-pref_value = 'IN' ).
+
+    IF ( lv_channel = 'VOICE' AND lv_dnc = abap_true )
+    OR ( lv_channel = 'POST'  AND lv_dnm = abap_true ).
+      " fallback order per DT_DNC_POLICY; native default: allowed list order
+      " skipping suppressed channels
+      SPLIT ls_cfg-allowed_channels AT ',' INTO TABLE DATA(lt_allowed).
+      LOOP AT lt_allowed INTO DATA(lv_cand).
+        CONDENSE lv_cand.
+        IF lv_cand = lv_channel. CONTINUE. ENDIF.
+        IF lv_cand = 'VOICE' AND lv_dnc = abap_true. CONTINUE. ENDIF.
+        IF lv_cand = 'POST'  AND lv_dnm = abap_true. CONTINUE. ENDIF.
+        rs_result-send    = abap_true.
+        rs_result-channel = lv_cand.
+        rs_result-reason  = COND #( WHEN lv_channel = 'VOICE' THEN 'DNC_FALLBACK'
+                                    ELSE 'DNM_FALLBACK' ).
+        RETURN.
+      ENDLOOP.
+      rs_result-send   = abap_false.
+      rs_result-reason = COND #( WHEN lv_channel = 'VOICE' THEN 'DNC_NO_ALTERNATIVE'
+                                 ELSE 'DNM_NO_ALTERNATIVE' ).
+      RETURN.
+    ENDIF.
+
+    rs_result-send = abap_true. rs_result-channel = lv_channel. rs_result-reason = 'OK'.
+    " Address resolution (BP email/phone via API_BUSINESS_PARTNER or ADR* reads)
+    " deliberately OUTSIDE BRF mirror - implement in the RAP wrapper. [validate]
+  ENDMETHOD.
+
+  "---------------------------------------------------------------------
+  METHOD read_active.
+    " Half-open validity [from, to): a row ended today is NOT active today.
+    DATA(lv_today) = cl_abap_context_info=>get_system_date( ).
+    IF iv_scope = c_scope_bp.
+      SELECT * FROM zcpc_pref
+        WHERE partner = @iv_partner AND pref_type = @iv_pref_type
+          AND vkont = @space
+          AND valid_from <= @lv_today
+          AND ( valid_to = @space OR valid_to > @lv_today )
+        ORDER BY valid_from DESCENDING
+        INTO @rs_row UP TO 1 ROWS.
+      ENDSELECT.
+    ELSE.
+      SELECT * FROM zcpc_pref
+        WHERE partner = @iv_partner AND pref_type = @iv_pref_type
+          AND vkont = @iv_vkont
+          AND valid_from <= @lv_today
+          AND ( valid_to = @space OR valid_to > @lv_today )
+        ORDER BY valid_from DESCENDING
+        INTO @rs_row UP TO 1 ROWS.
+      ENDSELECT.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD read_typecfg.
+    SELECT SINGLE * FROM zcpc_preftype WHERE pref_type = @iv_pref_type INTO @rs_cfg.
+  ENDMETHOD.
+
+  METHOD authorize.
+    " Role check via auth object ZCPC_AUTH; CUSTOMER context restricted to own
+    " partner via ZCPC_USERMAP (subject -> partner). [validate role design]
+    AUTHORITY-CHECK OBJECT 'ZCPC_AUTH'
+      ID 'ACTVT'   FIELD '02'
+      ID 'PARTNER' FIELD is_request-partner.
+    IF sy-subrc <> 0.
+      RAISE EXCEPTION TYPE cx_cpc_not_authorized.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD brf_guid.
+    SELECT SINGLE brf_guid FROM zcpc_brf_cfg WHERE fn_key = @iv_key INTO @rv_guid.
+  ENDMETHOD.
+
+ENDCLASS.
