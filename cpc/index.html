@@ -1,0 +1,705 @@
+<title>Customer Preference Center</title>
+<style>
+  :root{
+    --paper:#f2f4f3;--surface:#fff;--surface2:#f7f9f8;--ink:#131b18;--muted:#5a6a64;--faint:#8a978f;
+    --hair:#e2e6e3;--border:#131b1814;--line:#c8d0cc;
+    --brand:#0a6e5c;--brand-ink:#fff;--csr:#2a5fb8;--csr-bg:#2a5fb814;
+    --good:#0a7d3f;--good-bg:#0a7d3f16;--warn:#a8730f;--warn-bg:#fab21926;
+    --crit:#c2372f;--crit-bg:#c2372f14;--info:#2a5fb8;--info-bg:#2a5fb814;--purple:#6b3fa0;--purple-bg:#6b3fa014;
+    --r:10px;--r-s:7px;--shadow:0 1px 2px #131b1810,0 4px 14px #131b180a;
+    --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  @media(prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){
+    --paper:#0e1311;--surface:#171e1b;--surface2:#1e2723;--ink:#eef2f0;--muted:#a2b0aa;--faint:#71817a;
+    --hair:#27302c;--border:#ffffff18;--line:#39443f;--brand:#31ab90;--brand-ink:#07120f;
+    --csr:#6f9ff0;--csr-bg:#6f9ff01f;--good:#3cb46e;--good-bg:#3cb46e20;--warn:#d9a03c;--warn-bg:#d9a03c22;
+    --crit:#e4695f;--crit-bg:#e4695f1f;--info:#6f9ff0;--info-bg:#6f9ff01f;--purple:#a887e0;--purple-bg:#a887e01f;
+    --shadow:0 1px 2px #0007,0 6px 20px #0005;
+  }}
+  :root[data-theme="dark"]{
+    --paper:#0e1311;--surface:#171e1b;--surface2:#1e2723;--ink:#eef2f0;--muted:#a2b0aa;--faint:#71817a;
+    --hair:#27302c;--border:#ffffff18;--line:#39443f;--brand:#31ab90;--brand-ink:#07120f;
+    --csr:#6f9ff0;--csr-bg:#6f9ff01f;--good:#3cb46e;--good-bg:#3cb46e20;--warn:#d9a03c;--warn-bg:#d9a03c22;
+    --crit:#e4695f;--crit-bg:#e4695f1f;--info:#6f9ff0;--info-bg:#6f9ff01f;--purple:#a887e0;--purple-bg:#a887e01f;
+    --shadow:0 1px 2px #0007,0 6px 20px #0005;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--font);background:var(--paper);color:var(--ink);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{margin:0;line-height:1.25;font-weight:660}
+  h1{font-size:1.15rem}h2{font-size:1rem}h3{font-size:.9rem}
+  button{font-family:inherit;font-size:.88rem;cursor:pointer}
+  select,input[type=text],input[type=date],input[type=email],input[type=tel]{
+    font-family:inherit;font-size:.87rem;padding:6px 9px;border:1px solid var(--line);
+    border-radius:var(--r-s);background:var(--surface);color:var(--ink)}
+  input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+  .muted{color:var(--muted)}.faint{color:var(--faint)}.small{font-size:.8rem}.mono{font-family:var(--mono)}
+  .row{display:flex;align-items:center;gap:8px}.wrap{flex-wrap:wrap}.between{justify-content:space-between}.spacer{flex:1}
+
+  /* ---- context bar: who/what we're editing ---- */
+  .ctx{position:sticky;top:0;z-index:20;background:var(--surface);border-bottom:1px solid var(--border);padding:9px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .ctx .who{font-weight:680}
+  .ctx .kv{display:flex;gap:5px;align-items:baseline;font-size:.8rem}
+  .ctx .kv b{font-weight:600;color:var(--muted);font-weight:500}
+  .ctx .kv span{font-family:var(--mono);font-size:.82rem}
+  .mode-pill{font-size:.7rem;font-weight:750;letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:5px}
+  .mode-pill.csr{background:var(--csr-bg);color:var(--csr)}
+  .mode-pill.cust{background:var(--good-bg);color:var(--good)}
+
+  .page{max-width:1080px;margin:0 auto;padding:14px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:12px}
+  .card>.hd{padding:12px 14px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card>.bd{padding:6px 14px 12px}
+
+  .btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:var(--r-s);padding:6px 12px;font-weight:590}
+  .btn:hover{background:var(--surface2)}
+  .btn.p{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+  .btn.p:hover{filter:brightness(1.07)}
+  .btn.sm{padding:4px 9px;font-size:.8rem}
+  .btn.gh{background:transparent}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.danger{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 40%,var(--line))}
+
+  .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:.7rem;font-weight:680;letter-spacing:.02em;text-transform:uppercase}
+  .tag.good{background:var(--good-bg);color:var(--good)}
+  .tag.crit{background:var(--crit-bg);color:var(--crit)}
+  .tag.warn{background:var(--warn-bg);color:var(--warn)}
+  .tag.info{background:var(--info-bg);color:var(--info)}
+  .tag.pur{background:var(--purple-bg);color:var(--purple)}
+  .tag.n{background:var(--surface2);color:var(--muted)}
+
+  table.t{width:100%;border-collapse:collapse;font-size:.85rem}
+  table.t th{text-align:left;font-weight:620;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;padding:8px 9px;border-bottom:1px solid var(--line)}
+  table.t td{padding:9px;border-bottom:1px solid var(--hair);vertical-align:middle}
+  table.t tr:last-child td{border-bottom:none}
+  table.t tr.ended td{opacity:.58}
+  table.t tr.ended td .pname{text-decoration:line-through;text-decoration-thickness:1px}
+  .pname{font-weight:600}
+  .dt{font-family:var(--mono);font-size:.8rem;white-space:nowrap}
+
+  .sw{position:relative;width:38px;height:21px;display:inline-block;flex:none}
+  /* Input covers the whole switch: stays keyboard-focusable and exposed to
+     screen readers (zero-size inputs get skipped by some AT), while the
+     painted track/thumb sit underneath. */
+  .sw input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+  .sw input:disabled{cursor:not-allowed}
+  .sw .tk{position:absolute;inset:0;background:var(--line);border-radius:999px;transition:background .15s}
+  .sw .tb{position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px #0004}
+  .sw input:checked+.tk{background:var(--brand)}
+  .sw input:checked+.tk+.tb{transform:translateX(17px)}
+  .sw input:focus-visible+.tk{outline:2px solid var(--brand);outline-offset:2px}
+  .sw.dnc input:checked+.tk{background:var(--crit)}
+
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden}
+  .seg button{border:none;background:var(--surface);padding:5px 11px;color:var(--muted);font-weight:600;font-size:.8rem}
+  .seg button.on{background:var(--brand);color:var(--brand-ink)}
+
+  .banner{display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:var(--r);margin-bottom:12px;font-size:.86rem}
+  .banner.csr{background:var(--csr-bg);border:1px solid color-mix(in srgb,var(--csr) 28%,transparent)}
+  .banner.warnb{background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 32%,transparent)}
+  .banner .ic{font-size:1.05rem;line-height:1.3}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:.79rem;font-weight:560;cursor:pointer}
+  .chip.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+
+  .save{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:11px 14px;display:flex;gap:10px;align-items:center;justify-content:flex-end;z-index:15;box-shadow:0 -3px 14px #131b180d}
+  .save .n{margin-right:auto;font-size:.83rem}
+
+  pre.j{background:var(--surface2);border:1px solid var(--hair);border-radius:var(--r-s);padding:11px 13px;overflow-x:auto;font-family:var(--mono);font-size:.78rem;line-height:1.6;margin:0}
+  pre.j .k{color:var(--purple)}pre.j .s{color:var(--good)}pre.j .c{color:var(--faint)}
+
+  .toasts{position:fixed;bottom:16px;right:16px;z-index:60;display:flex;flex-direction:column;gap:8px}
+  .toast{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--good);border-radius:var(--r-s);padding:10px 14px;box-shadow:var(--shadow);font-size:.86rem;max-width:330px;animation:sl .18s ease}
+  @keyframes sl{from{transform:translateY(6px);opacity:0}to{transform:none;opacity:1}}
+
+  .bd-drop{position:fixed;inset:0;background:#0008;display:grid;place-items:center;z-index:50;padding:16px}
+  .modal{background:var(--surface);border-radius:14px;max-width:520px;width:100%;max-height:88vh;overflow-y:auto;padding:20px;box-shadow:0 18px 50px #0007}
+  .fld{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+  .fld label{font-size:.8rem;font-weight:620;color:var(--muted)}
+
+  .ev{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--hair);font-size:.84rem}
+  .ev:last-child{border-bottom:none}
+  .ev .dot{width:7px;height:7px;border-radius:50%;flex:none}
+
+  details.raw{margin-top:10px}
+  details.raw summary{cursor:pointer;font-size:.82rem;color:var(--muted);font-weight:600;padding:4px 0}
+  .hide{display:none!important}
+</style>
+
+<div id="app"></div>
+<div class="toasts" id="toasts"></div>
+<div id="modal"></div>
+
+<script>
+"use strict";
+/* =============================================================================
+   CUSTOMER PREFERENCE CENTER — standalone, embeddable (SAP Service Cloud V2 mashup)
+   -----------------------------------------------------------------------------
+   Aligned to the CPC functional specs:
+     CPC01  Active preferences by default + Show/Hide History
+     CPC02  Copy Preference
+     CPC03  End Preference (end-dating, never physical delete)
+     CPC04  Apply All (across contract accounts)
+     CPC05  Update BP communication data (phone/email) from the preference center
+     CPC08  Show acting user credentials
+     CPC10-14  BRF+ auto-update on business events (Move-In / Move-Out)
+     CPC16  DNC (Do Not Call) handling
+     CPC15/17/18/19  OMS + DRMS sourced preferences
+
+   EMBEDDING (URL mashup):
+     index.html?mode=csr&bp=0000100045&ca=200045678&agent=jdoe&caseId=8000123
+     index.html?mode=customer&bp=0000100045&ca=200045678
+   Params: mode (csr|customer) · bp · ca · agent · agentName · caseId · theme (light|dark)
+   Exact Service Cloud V2 parameter names must be validated against your mashup config.
+
+   PERSISTENCE: this build runs on in-memory demo data and PREVIEWS the exact
+   payload it would PUT to the backend. Point API_BASE at your BTP/CPI endpoint
+   to make it live — see saveChanges().
+============================================================================= */
+
+//---- URL context ------------------------------------------------------------
+const P = new URLSearchParams(location.search);
+const CTX = {
+  mode: (P.get('mode') || 'csr').toLowerCase() === 'customer' ? 'customer' : 'csr',
+  bp: P.get('bp') || '0000100045',
+  ca: P.get('ca') || '200045678',
+  agent: P.get('agent') || 'jdoe',
+  agentName: P.get('agentName') || 'J. Doe (CSR)',
+  caseId: P.get('caseId') || '',
+  readonly: P.get('readonly') === 'true',
+};
+if (P.get('theme')) document.documentElement.setAttribute('data-theme', P.get('theme'));
+const isCSR = CTX.mode === 'csr';
+const ACTOR = isCSR ? { id: CTX.agent, name: CTX.agentName, role: 'CSR', src: 'CSR' }
+                    : { id: 'SELF', name: 'Customer (self-service)', role: 'CUSTOMER', src: 'PORTAL' };
+
+const API_BASE = ''; // e.g. 'https://api.svgbs.com/api/v1' — empty = demo mode
+
+//---- Demo master data -------------------------------------------------------
+const CUSTOMER = {
+  bp: CTX.bp, name: 'Alex Johnson', ca: CTX.ca,
+  premise: '123 Green Street, Springfield IL 62704',
+  email: 'alex.johnson@example.com', mobile: '+1-555-0142', phone: '+1-555-0177',
+  contracts: [
+    { ca: '200045678', addr: '123 Green Street, Springfield', div: 'Electric' },
+    { ca: '200045679', addr: '48 Oak Avenue Unit 2, Springfield', div: 'Electric' },
+  ],
+};
+
+// Preference catalogue — category → types. Channels allowed per type.
+const CATALOG = [
+  { cat:'BILLING', label:'Billing & Payment', types:[
+    {id:'PAPERLESS',   name:'Paperless billing',        ch:['EMAIL'],                      dflt:'IN'},
+    {id:'BILL_READY',  name:'Bill ready notification',  ch:['EMAIL','SMS','PUSH'],         dflt:'IN'},
+    {id:'PAY_CONFIRM', name:'Payment confirmation',     ch:['EMAIL','SMS'],                dflt:'IN'},
+    {id:'PAY_REMIND',  name:'Payment reminder',         ch:['EMAIL','SMS','VOICE'],        dflt:'IN'},
+    {id:'PAST_DUE',    name:'Past-due notice',          ch:['EMAIL','SMS','VOICE','POST'], dflt:'IN', mandatory:true},
+  ]},
+  { cat:'OUTAGE', label:'Outage (OMS)', src:'OMS', types:[
+    {id:'OUT_DETECT',  name:'Outage detected',          ch:['SMS','EMAIL','PUSH','VOICE'], dflt:'IN'},
+    {id:'OUT_ETR',     name:'Estimated restoration',    ch:['SMS','EMAIL','PUSH'],         dflt:'IN'},
+    {id:'OUT_CREW',    name:'Crew dispatched',          ch:['SMS','PUSH'],                 dflt:'OUT'},
+    {id:'OUT_RESTORE', name:'Power restored',           ch:['SMS','EMAIL','PUSH'],         dflt:'IN'},
+    {id:'OUT_PLANNED', name:'Planned outage notice',    ch:['SMS','EMAIL','POST'],         dflt:'IN'},
+  ]},
+  { cat:'USAGE', label:'Usage & Alerts', types:[
+    {id:'HIGH_USAGE',  name:'High usage alert',         ch:['EMAIL','SMS','PUSH'],         dflt:'IN'},
+    {id:'BILL_PROJ',   name:'Projected bill alert',     ch:['EMAIL','SMS'],                dflt:'IN'},
+    {id:'PEAK_DEMAND', name:'Peak demand alert',        ch:['EMAIL','SMS'],                dflt:'OUT'},
+  ]},
+  { cat:'PROGRAM', label:'Program & DR (DRMS)', src:'DRMS', types:[
+    {id:'DR_EVENT',    name:'Demand response event',    ch:['SMS','EMAIL','PUSH','VOICE'], dflt:'IN'},
+    {id:'EE_OFFER',    name:'Energy efficiency offers', ch:['EMAIL','POST'],               dflt:'IN'},
+    {id:'EV_PROGRAM',  name:'EV program communications',ch:['EMAIL','SMS'],                dflt:'IN'},
+    {id:'SOLAR_PROG',  name:'Solar / renewable offers', ch:['EMAIL'],                      dflt:'OUT'},
+  ]},
+  { cat:'MARKETING', label:'Marketing & Research', types:[
+    {id:'PARTNER',     name:'Partner offers',           ch:['EMAIL','POST'],               dflt:'OUT'},
+    {id:'PRODUCT_REC', name:'Product recommendations',  ch:['EMAIL'],                      dflt:'OUT'},
+    {id:'RESEARCH',    name:'Research participation',   ch:['EMAIL','VOICE'],              dflt:'IN'},
+  ]},
+  { cat:'PRIVACY', label:'Privacy & Consent', types:[
+    // scope:'BP' — held against the Business Partner, so it applies to EVERY contract
+    // account and is never reset by a Move-In/Move-Out on one account.
+    {id:'DNC',         name:'Do Not Call (DNC)',        ch:['VOICE'],                      dflt:'OUT', dnc:true, scope:'BP'},
+    {id:'DNM',         name:'Do Not Mail',              ch:['POST'],                       dflt:'OUT', dnc:true, scope:'BP'},
+    {id:'THIRD_PARTY', name:'Third-party data sharing', ch:['ALL'],                        dflt:'OUT', scope:'BP'},
+    // Smart-meter consent stays CA-level: it concerns the device/installation at a premise.
+    {id:'AMI_CONSENT', name:'Smart meter data consent', ch:['ALL'],                        dflt:'IN'},
+  ]},
+];
+// Default scope is the contract account; only types that explicitly say so are BP-wide.
+const scopeOf = (typeId) => (TYPE[typeId] && TYPE[typeId].scope) === 'BP' ? 'BP' : 'CA';
+const TYPE = {}; CATALOG.forEach(c => c.types.forEach(t => TYPE[t.id] = Object.assign({}, t, {cat:c.cat, catLabel:c.label, catSrc:c.src})));
+const CHANNELS = ['EMAIL','SMS','VOICE','PUSH','POST'];
+const CH_LABEL = {EMAIL:'Email',SMS:'SMS',VOICE:'Voice',PUSH:'Push',POST:'Mail',ALL:'All channels'};
+
+const today = () => new Date().toISOString().slice(0,10);
+const uid = (p) => p + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
+
+//---- Preference records (validity-dated; ended, never deleted — CPC03) ------
+let RECORDS = [
+  rec('PAPERLESS','EMAIL','IN','2024-03-11',null,'PORTAL'),
+  rec('BILL_READY','EMAIL','IN','2024-03-11',null,'PORTAL'),
+  rec('PAY_REMIND','SMS','IN','2025-01-20',null,'CSR'),
+  rec('PAST_DUE','EMAIL','IN','2024-03-11',null,'MIGRATION'),
+  rec('OUT_DETECT','SMS','IN','2024-06-02',null,'OMS'),
+  rec('OUT_ETR','SMS','IN','2024-06-02',null,'OMS'),
+  rec('OUT_RESTORE','SMS','IN','2024-06-02',null,'OMS'),
+  rec('OUT_PLANNED','EMAIL','IN','2024-06-02',null,'OMS'),
+  rec('HIGH_USAGE','EMAIL','IN','2025-04-18',null,'PORTAL'),
+  rec('BILL_PROJ','EMAIL','IN','2025-04-18',null,'PORTAL'),
+  rec('DR_EVENT','SMS','IN','2025-07-01',null,'DRMS'),
+  rec('EE_OFFER','EMAIL','IN','2024-03-11',null,'PORTAL'),
+  rec('EV_PROGRAM','EMAIL','IN','2025-07-01',null,'DRMS'),
+  rec('AMI_CONSENT','ALL','IN','2024-03-11',null,'PORTAL'),
+  rec('DNC','VOICE','IN','2026-01-15',null,'CSR'),          // customer IS on DNC
+  rec('PARTNER','EMAIL','OUT','2026-01-15',null,'CSR'),
+  // historical / ended examples (CPC01 history view)
+  rec('BILL_READY','SMS','IN','2024-03-11','2025-01-19','PORTAL'),
+  rec('PARTNER','EMAIL','IN','2024-03-11','2026-01-14','MIGRATION'),
+  rec('OUT_CREW','SMS','IN','2024-06-02','2025-11-30','OMS'),
+];
+function rec(type, ch, val, from, to, src){
+  // BP-scoped preferences (DNC, DNM, third-party sharing) are keyed to the Business
+  // Partner only — ca is null so they hold across every contract account.
+  return { id: uid('PR'), bp: CUSTOMER.bp,
+           ca: scopeOf(type) === 'BP' ? null : CUSTOMER.ca,
+           scope: scopeOf(type), type, channel: ch,
+           value: val, validFrom: from, validTo: to, source: src,
+           changedBy: src === 'PORTAL' ? 'SELF' : (src === 'CSR' ? 'kbutts' : 'SYSTEM'),
+           changedAt: from + 'T09:14:00Z' };
+}
+// Validity is a half-open interval [validFrom, validTo): validTo is the date the
+// preference STOPS applying. So ending a record "today" makes it inactive today and
+// a replacement starting today leaves neither a gap nor an overlap.
+const isActive = r => !r.validTo || r.validTo > today();
+const activeFor = (type) => RECORDS.filter(r => r.type === type && isActive(r));
+
+//---- Session state ----------------------------------------------------------
+const S = { showHistory:false, filter:'ALL', pending:[], audit:[], events:[] };
+
+//---- Pending-change model (staged until Save — CPC01/CPC03 semantics) -------
+// {kind:'SET'|'END'|'CHANNEL', type, channel, value, prevRecId}
+function stageSet(type, channel, value){
+  S.pending = S.pending.filter(p => !(p.type===type && p.kind!=='END'));
+  const cur = activeFor(type)[0];
+  const same = cur && cur.value===value && cur.channel===channel;
+  if (!same) S.pending.push({kind:'SET', type, channel, value, prevRecId: cur ? cur.id : null});
+  render();
+}
+function stageEnd(recId){
+  const r = RECORDS.find(x => x.id===recId);
+  if (!r) return;
+  if (S.pending.some(p => p.kind==='END' && p.recId===recId)) return;
+  S.pending.push({kind:'END', recId, type:r.type, channel:r.channel});
+  render();
+}
+const pendingFor = (type) => S.pending.find(p => p.kind==='SET' && p.type===type);
+
+// Effective (staged) view of a preference type
+function effective(type){
+  const p = pendingFor(type);
+  const cur = activeFor(type).filter(r => !S.pending.some(x=>x.kind==='END'&&x.recId===r.id))[0];
+  if (p) return { value:p.value, channel:p.channel, staged:true, rec:cur };
+  if (cur) return { value:cur.value, channel:cur.channel, staged:false, rec:cur };
+  return { value:'NONE', channel:TYPE[type].ch[0], staged:false, rec:null };
+}
+
+//---- Save: end-date the old record, insert the new (never update in place) --
+function saveChanges(){
+  if (!S.pending.length) return;
+  const payload = buildPayload();
+
+  if (API_BASE) {
+    // LIVE MODE — PUT to backend → CPI/Integration Suite → S/4HANA Utilities + BRFplus
+    fetch(API_BASE + '/preferences', {
+      method:'PUT', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    }).then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(() => { applyLocally(payload); toast('Preferences saved to S/4HANA.'); })
+      .catch(e => toast('Could not save preferences (' + e + '). No changes were applied.', true));
+    return;
+  }
+  applyLocally(payload);
+  toast('Preferences saved — ' + payload.changes.length + ' change(s) recorded.');
+  notifyHost('PREFERENCES_SAVED', payload);
+}
+
+function applyLocally(payload){
+  const stamp = new Date().toISOString();
+  payload.changes.forEach(c => {
+    if (c.operation === 'END' || c.operation === 'REPLACE') {
+      // Half-open interval: the old record stops on the day the new one starts,
+      // so there is neither an overlap nor a gap in coverage.
+      const old = RECORDS.find(r => r.id === c.endedRecordId);
+      if (old) old.validTo = c.validFromNew || today();
+      audit(c.preferenceType, 'END', old ? old.value+'/'+old.channel : '', '—', c.reasonCode);
+    }
+    if (c.operation === 'SET' || c.operation === 'REPLACE') {
+      RECORDS.unshift({ id: uid('PR'), bp:CUSTOMER.bp,
+        ca: scopeOf(c.preferenceType) === 'BP' ? null : CUSTOMER.ca,
+        scope: scopeOf(c.preferenceType), type:c.preferenceType,
+        channel:c.channel, value:c.value, validFrom:c.validFromNew, validTo:null,
+        source:ACTOR.src, changedBy:ACTOR.id, changedAt:stamp });
+      audit(c.preferenceType, 'SET', c.previousValue || '—', c.value+'/'+c.channel, c.reasonCode);
+    }
+  });
+  S.pending = [];
+  render();
+}
+
+function buildPayload(){
+  const changes = S.pending.map(p => {
+    if (p.kind === 'END') {
+      const r = RECORDS.find(x=>x.id===p.recId);
+      return { operation:'END', preferenceType:p.type, channel:p.channel,
+               scope: scopeOf(p.type),
+               contractAccount: scopeOf(p.type) === 'BP' ? null : CUSTOMER.ca,
+               endedRecordId:p.recId, validTo:today(),
+               previousValue:r?r.value:null, reasonCode:'CUSTOMER_REQUEST' };
+    }
+    const prev = p.prevRecId ? RECORDS.find(x=>x.id===p.prevRecId) : null;
+    return { operation: prev ? 'REPLACE' : 'SET', preferenceType:p.type, channel:p.channel,
+             // BP-level preferences carry no contract account: S/4 stores them once
+             // against the Business Partner, effective for all contract accounts.
+             scope: scopeOf(p.type),
+             contractAccount: scopeOf(p.type) === 'BP' ? null : CUSTOMER.ca,
+             value:p.value, validFromNew:today(),
+             endedRecordId: prev ? prev.id : null,
+             previousValue: prev ? prev.value+'/'+prev.channel : null,
+             reasonCode:'CUSTOMER_REQUEST' };
+  });
+  return {
+    businessPartner: CUSTOMER.bp, contractAccount: CUSTOMER.ca,
+    source: ACTOR.src, changedBy: ACTOR.id, changedByRole: ACTOR.role,
+    onBehalfOf: isCSR ? CUSTOMER.bp : null,
+    caseId: CTX.caseId || null, timestamp: new Date().toISOString(),
+    changes
+  };
+}
+
+function audit(type, action, prev, next, reason){
+  S.audit.unshift({ t:new Date().toLocaleTimeString(), type, action, prev, next,
+                    src:ACTOR.src, by:ACTOR.id, role:ACTOR.role, reason });
+}
+
+//---- BRF+ business-event simulation (CPC10–14) ------------------------------
+// Move-In / Move-Out raise BO events; BRFplus rules auto-adjust preferences so a
+// CSR never has to do it by hand.
+const BRF_RULES = {
+  MOVE_OUT: {
+    label:'Move-Out',
+    desc:'End all marketing and program preferences; retain billing/past-due until final bill is settled.',
+    apply(){
+      const ended=[];
+      ['PARTNER','PRODUCT_REC','EE_OFFER','EV_PROGRAM','SOLAR_PROG','DR_EVENT','HIGH_USAGE','BILL_PROJ','PEAK_DEMAND']
+        .forEach(t => activeFor(t).forEach(r => { r.validTo = today(); ended.push(t); }));
+      return ended;
+    }
+  },
+  MOVE_IN: {
+    label:'Move-In',
+    desc:'Create default CA-level preferences for the new contract account; BP-level preferences (DNC, DNM, data sharing) carry forward untouched.',
+    apply(){
+      const created=[];
+      CATALOG.forEach(c => c.types.forEach(t => {
+        if (scopeOf(t.id) === 'BP') return;        // BP-level follows the partner, never reset per account
+        if (activeFor(t.id).length) return;
+        RECORDS.unshift({ id:uid('PR'), bp:CUSTOMER.bp, ca:CUSTOMER.ca, type:t.id,
+          channel:t.ch[0], value:t.dflt, validFrom:today(), validTo:null,
+          source:'BRF+', changedBy:'BRFPLUS', changedAt:new Date().toISOString() });
+        created.push(t.id);
+      }));
+      return created;
+    }
+  }
+};
+function fireEvent(key){
+  const rule = BRF_RULES[key];
+  const affected = rule.apply();
+  S.events.unshift({ t:new Date().toLocaleTimeString(), key, label:rule.label, n:affected.length });
+  audit('*', 'BRF_AUTO_'+key, '—', affected.length + ' preference(s)', 'BO_EVENT');
+  toast('BRF+ processed ' + rule.label + ' — ' + affected.length + ' preference(s) auto-updated.');
+  notifyHost('BRF_EVENT_PROCESSED', { event:key, affected });
+  render();
+}
+
+//---- Outbound communication resolution (the "communicate per preference" step)
+// Given a notification type, resolve WHO gets it, on WHICH channel, honoring DNC.
+function resolveComm(type){
+  const dncOn  = effective('DNC').value === 'IN';
+  const dnmOn  = effective('DNM').value === 'IN';
+  const e = effective(type);
+  const t = TYPE[type];
+  if (e.value !== 'IN') return { send:false, reason:'Customer opted out of ' + t.name };
+  let ch = e.channel;
+  if (ch === 'VOICE' && dncOn) {
+    const alt = t.ch.find(c => c !== 'VOICE' && c !== 'POST');
+    if (!alt) return { send:false, reason:'DNC active and no alternative channel permitted' };
+    return { send:true, channel:alt, addr:addrFor(alt), note:'Voice suppressed by DNC → fell back to ' + CH_LABEL[alt] };
+  }
+  if (ch === 'POST' && dnmOn) {
+    const alt = t.ch.find(c => c !== 'POST');
+    if (!alt) return { send:false, reason:'Do Not Mail active and no alternative channel' };
+    return { send:true, channel:alt, addr:addrFor(alt), note:'Mail suppressed by DNM → fell back to ' + CH_LABEL[alt] };
+  }
+  return { send:true, channel:ch, addr:addrFor(ch) };
+}
+const addrFor = (ch) => ch==='EMAIL' ? CUSTOMER.email : ch==='SMS'||ch==='PUSH' ? CUSTOMER.mobile
+                      : ch==='VOICE' ? CUSTOMER.phone : ch==='POST' ? CUSTOMER.premise : '—';
+
+//---- Host integration (Service Cloud V2 iframe) -----------------------------
+function notifyHost(type, data){
+  try { parent.postMessage({ source:'CPC', type, bp:CUSTOMER.bp, ca:CUSTOMER.ca, data }, '*'); } catch(e){}
+}
+
+//---- UI helpers -------------------------------------------------------------
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m, err){
+  const d=document.createElement('div'); d.className='toast';
+  if(err) d.style.borderLeftColor='var(--crit)';
+  d.textContent = (err?'⚠ ':'✓ ')+m; $('#toasts').appendChild(d);
+  setTimeout(()=>d.remove(), 4000);
+}
+const SRC_TAG = { PORTAL:'good', CSR:'info', OMS:'warn', DRMS:'pur', MIGRATION:'n', 'BRF+':'pur' };
+
+//---- Render -----------------------------------------------------------------
+function render(){
+  const cats = CATALOG.filter(c => S.filter==='ALL' || c.cat===S.filter);
+  const dncOn = effective('DNC').value==='IN';
+
+  $('#app').innerHTML = `
+  <div class="ctx">
+    <span class="mode-pill ${isCSR?'csr':'cust'}">${isCSR?'CSR — on behalf of':'My preferences'}</span>
+    <span class="who">${esc(CUSTOMER.name)}</span>
+    <span class="kv"><b>BP</b><span>${esc(CUSTOMER.bp)}</span></span>
+    <span class="kv"><b>Contract acct</b><span>${esc(CUSTOMER.ca)}</span></span>
+    ${CTX.caseId?`<span class="kv"><b>Case</b><span>${esc(CTX.caseId)}</span></span>`:''}
+    <span class="spacer"></span>
+    ${isCSR?`<span class="kv small faint">Agent: <span>${esc(ACTOR.id)}</span></span>`:''}
+  </div>
+
+  <div class="page">
+    ${isCSR?`<div class="banner csr"><div class="ic">🎧</div><div>
+      <strong>Agent view.</strong> Every change is written to S/4HANA with your user (<span class="mono">${esc(ACTOR.id)}</span>),
+      source <span class="mono">CSR</span>, and on-behalf-of BP <span class="mono">${esc(CUSTOMER.bp)}</span>.
+      Preferences are <em>end-dated</em>, never deleted — history stays auditable.
+    </div></div>`:''}
+
+    ${dncOn?`<div class="banner warnb"><div class="ic">🚫</div><div>
+      <strong>Do Not Call is active</strong> (since ${esc((activeFor('DNC')[0]||{}).validFrom||'—')}) —
+      held at <strong>Business Partner level</strong>, so it applies to <em>all ${CUSTOMER.contracts.length} contract accounts</em>.
+      Voice channels are suppressed everywhere; outbound falls back to a permitted channel automatically.
+    </div></div>`:''}
+
+    <div class="card">
+      <div class="hd">
+        <h1>Preferences</h1>
+        <span class="tag n">${RECORDS.filter(isActive).length} active</span>
+        <span class="spacer"></span>
+        <div class="seg">
+          <button class="${!S.showHistory?'on':''}" data-hist="0">Active only</button>
+          <button class="${S.showHistory?'on':''}" data-hist="1">Show history</button>
+        </div>
+        ${isCSR?`<button class="btn sm" data-act="copy">Copy…</button>
+                 <button class="btn sm" data-act="applyall">Apply all…</button>`:''}
+      </div>
+      <div class="bd">
+        <div class="row wrap" style="gap:6px;margin:6px 0 10px">
+          <button class="chip ${S.filter==='ALL'?'on':''}" data-f="ALL">All</button>
+          ${CATALOG.map(c=>`<button class="chip ${S.filter===c.cat?'on':''}" data-f="${c.cat}">${esc(c.label)}</button>`).join('')}
+        </div>
+        ${cats.map(renderCat).join('')}
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="hd"><h2>Communication preview</h2><span class="tag n">honors DNC</span></div>
+        <div class="bd">
+          <p class="small muted" style="margin:6px 0 10px">How the next outbound message resolves for this customer, using the effective preferences above.</p>
+          ${['PAST_DUE','OUT_DETECT','DR_EVENT','HIGH_USAGE','PARTNER'].map(t=>{
+            const r = resolveComm(t);
+            return `<div class="ev">
+              <span class="dot" style="background:${r.send?'var(--good)':'var(--crit)'}"></span>
+              <div style="flex:1"><strong>${esc(TYPE[t].name)}</strong>
+                <div class="small faint">${r.send?`via <b>${CH_LABEL[r.channel]}</b> → <span class="mono">${esc(r.addr)}</span>${r.note?` · ${esc(r.note)}`:''}`:esc(r.reason)}</div>
+              </div>
+              <span class="tag ${r.send?'good':'crit'}">${r.send?'Send':'Suppress'}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="hd"><h2>Business events (BRF+)</h2></div>
+        <div class="bd">
+          <p class="small muted" style="margin:6px 0 10px">Move-In / Move-Out raise business object events; BRFplus rules auto-adjust preferences so no manual CSR update is needed <span class="faint">(CPC10–14)</span>.</p>
+          ${Object.entries(BRF_RULES).map(([k,v])=>`
+            <div class="ev"><div style="flex:1"><strong>${esc(v.label)}</strong>
+              <div class="small faint">${esc(v.desc)}</div></div>
+              <button class="btn sm" data-ev="${k}">Simulate</button></div>`).join('')}
+          ${S.events.length?`<div style="margin-top:10px" class="small">
+            ${S.events.slice(0,4).map(e=>`<div class="ev"><span class="dot" style="background:var(--purple)"></span>
+              <div style="flex:1">${esc(e.label)} processed — ${e.n} preference(s)</div>
+              <span class="faint mono">${esc(e.t)}</span></div>`).join('')}</div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Change log</h2><span class="spacer"></span>
+        <span class="small faint">Customer · Account · Category · Previous → New · Effective · Source · User · Timestamp</span></div>
+      <div class="bd">
+        ${S.audit.length?`<table class="t"><thead><tr><th>Time</th><th>Preference</th><th>Action</th><th>Previous</th><th>New</th><th>Source</th><th>User</th></tr></thead><tbody>
+          ${S.audit.slice(0,14).map(a=>`<tr><td class="dt">${esc(a.t)}</td><td>${esc(a.type==='*'?'(bulk)':(TYPE[a.type]?TYPE[a.type].name:a.type))}</td>
+            <td><span class="tag ${a.action.startsWith('BRF')?'pur':a.action==='END'?'crit':'good'}">${esc(a.action)}</span></td>
+            <td class="muted">${esc(a.prev)}</td><td><strong>${esc(a.next)}</strong></td>
+            <td><span class="tag ${SRC_TAG[a.src]||'n'}">${esc(a.src)}</span></td>
+            <td class="mono small">${esc(a.by)} <span class="faint">(${esc(a.role)})</span></td></tr>`).join('')}
+        </tbody></table>`:'<p class="muted small" style="padding:6px 0">No changes in this session yet. Toggle a preference and save.</p>'}
+
+        <details class="raw"><summary>Show the payload that will be sent to S/4HANA</summary>
+          <pre class="j">${syntax(JSON.stringify(buildPayload(), null, 2))}</pre>
+          <p class="small faint" style="margin-top:6px">PUT <span class="mono">{API_BASE}/preferences</span> → SAP Integration Suite → S/4HANA Utilities (BP / Contract Account) → BRFplus.
+          Exact S/4 service and field mapping to be validated against your landscape.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  ${S.pending.length && !CTX.readonly ? `<div class="save">
+    <span class="n muted">${S.pending.length} unsaved change${S.pending.length===1?'':'s'}</span>
+    <button class="btn" data-act="discard">Discard</button>
+    <button class="btn p" data-act="save">Save preferences</button>
+  </div>`:''}`;
+}
+
+function renderCat(c){
+  const rows = c.types.map(t => {
+    const e = effective(t.id);
+    const on = e.value === 'IN';
+    const cur = e.rec;
+    const ending = cur && S.pending.some(p=>p.kind==='END'&&p.recId===cur.id);
+    const chOpts = (t.ch[0]==='ALL'?['ALL']:t.ch);
+    return `<tr class="${ending?'ended':''}">
+      <td><div class="pname">${esc(t.name)}${t.mandatory?' <span class="tag n" title="Regulatory — cannot be switched off">required</span>':''}
+          ${scopeOf(t.id)==='BP'?' <span class="tag info" title="Held at Business Partner level — applies to all contract accounts">BP-wide</span>':''}</div>
+          <div class="small faint mono">${esc(t.id)}</div></td>
+      <td>
+        <select data-ch="${t.id}" ${(!on||t.mandatory&&false)?'':''} ${CTX.readonly?'disabled':''}>
+          ${chOpts.map(ch=>`<option value="${ch}" ${e.channel===ch?'selected':''}>${CH_LABEL[ch]}</option>`).join('')}
+        </select>
+      </td>
+      <td class="dt">${cur?esc(cur.validFrom):'<span class="faint">—</span>'}</td>
+      <td>${cur?`<span class="tag ${SRC_TAG[cur.source]||'n'}">${esc(cur.source)}</span>`:''}</td>
+      <td style="text-align:right">
+        ${e.staged?'<span class="tag warn" style="margin-right:6px">staged</span>':''}
+        <label class="sw ${t.dnc?'dnc':''}" title="${on?'Opted in':'Opted out'}">
+          <input type="checkbox" ${on?'checked':''} ${CTX.readonly||t.mandatory?'disabled':''} data-tog="${t.id}"
+                 aria-label="${esc(t.name)}"><span class="tk"></span><span class="tb"></span></label>
+      </td>
+      <td style="text-align:right;width:1%">
+        ${cur&&!CTX.readonly&&!t.mandatory?`<button class="btn sm gh danger" data-end="${cur.id}" title="End this preference (end-date, keeps history)">End</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  const hist = S.showHistory ? RECORDS.filter(r => !isActive(r) && TYPE[r.type] && TYPE[r.type].cat===c.cat) : [];
+  const histRows = hist.map(r=>`<tr class="ended">
+      <td><div class="pname">${esc(TYPE[r.type].name)}</div><div class="small faint mono">${esc(r.type)}</div></td>
+      <td class="small muted">${CH_LABEL[r.channel]||r.channel}</td>
+      <td class="dt">${esc(r.validFrom)} → ${esc(r.validTo)}</td>
+      <td><span class="tag ${SRC_TAG[r.source]||'n'}">${esc(r.source)}</span></td>
+      <td style="text-align:right"><span class="tag n">${r.value==='IN'?'Opted in':'Opted out'}</span></td>
+      <td></td></tr>`).join('');
+
+  return `<h3 style="margin:14px 0 6px">${esc(c.label)}
+    ${c.src?`<span class="tag ${SRC_TAG[c.src]||'n'}" style="margin-left:6px">source ${esc(c.src)}</span>`:''}</h3>
+    <table class="t"><thead><tr><th>Preference</th><th>Channel</th><th>Valid from</th><th>Source</th><th style="text-align:right">Opt in</th><th></th></tr></thead>
+    <tbody>${rows}${histRows?`<tr><td colspan="6" class="small faint" style="padding-top:12px;border-bottom:none">Ended preferences (history)</td></tr>${histRows}`:''}</tbody></table>`;
+}
+
+function syntax(j){
+  return esc(j).replace(/&quot;([^&]+)&quot;(\s*:)/g,'<span class="k">"$1"</span>$2')
+               .replace(/:\s*&quot;([^&]*)&quot;/g,': <span class="s">"$1"</span>')
+               .replace(/\bnull\b/g,'<span class="c">null</span>');
+}
+
+//---- Copy / Apply-all modals (CPC02 / CPC04) --------------------------------
+function modalCopy(){
+  $('#modal').innerHTML = `<div class="bd-drop"><div class="modal">
+    <div class="row between"><h2>Copy preferences</h2><button class="btn sm gh" data-close>✕</button></div>
+    <p class="small muted">Copy the active <strong>account-level</strong> preference set from this contract account to another account of the same business partner <span class="faint">(CPC02)</span>. BP-level preferences (DNC, Do&nbsp;Not&nbsp;Mail, data sharing) are excluded — they already apply to every account.</p>
+    <div class="fld"><label>From</label><input type="text" value="${esc(CUSTOMER.ca)} — ${esc(CUSTOMER.premise)}" disabled></div>
+    <div class="fld"><label>To contract account</label><select id="copyTo">
+      ${CUSTOMER.contracts.filter(c=>c.ca!==CUSTOMER.ca).map(c=>`<option value="${c.ca}">${esc(c.ca)} — ${esc(c.addr)}</option>`).join('')}
+    </select></div>
+    <div class="fld"><label>Effective from</label><input type="date" id="copyFrom" value="${today()}"></div>
+    <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancel</button>
+      <button class="btn p" data-do="copy">Copy preferences</button></div>
+  </div></div>`;
+}
+function modalApplyAll(){
+  $('#modal').innerHTML = `<div class="bd-drop"><div class="modal">
+    <div class="row between"><h2>Apply to all accounts</h2><button class="btn sm gh" data-close>✕</button></div>
+    <p class="small muted">Apply the current <strong>account-level</strong> preference set to <strong>every</strong> contract account of business partner ${esc(CUSTOMER.bp)} <span class="faint">(CPC04)</span>. BP-level preferences are unaffected — they already cover all accounts.</p>
+    <div class="fld"><label>Accounts affected</label>
+      <div class="small">${CUSTOMER.contracts.map(c=>`<div class="ev"><span class="dot" style="background:var(--brand)"></span><div style="flex:1">${esc(c.ca)} — ${esc(c.addr)}</div></div>`).join('')}</div></div>
+    <div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" data-close>Cancel</button>
+      <button class="btn p" data-do="applyall">Apply to all</button></div>
+  </div></div>`;
+}
+
+//---- Events -----------------------------------------------------------------
+document.addEventListener('click', e => {
+  if (e.target.classList && e.target.classList.contains('bd-drop')) { $('#modal').innerHTML=''; return; }
+  const t = e.target.closest('[data-hist],[data-f],[data-act],[data-end],[data-ev],[data-close],[data-do]');
+  if (!t) return;
+  if (t.dataset.hist !== undefined) { S.showHistory = t.dataset.hist === '1'; render(); return; }
+  if (t.dataset.f) { S.filter = t.dataset.f; render(); return; }
+  if (t.dataset.end) { stageEnd(t.dataset.end); return; }
+  if (t.dataset.ev) { fireEvent(t.dataset.ev); return; }
+  if (t.dataset.close !== undefined) { $('#modal').innerHTML=''; return; }
+  if (t.dataset.act === 'save') { saveChanges(); return; }
+  if (t.dataset.act === 'discard') { S.pending=[]; render(); toast('Changes discarded.'); return; }
+  if (t.dataset.act === 'copy') { modalCopy(); return; }
+  if (t.dataset.act === 'applyall') { modalApplyAll(); return; }
+  if (t.dataset.do === 'copy') {
+    const to = $('#copyTo').value;
+    audit('*','COPY', CUSTOMER.ca, to, 'CSR_COPY');
+    notifyHost('PREFERENCES_COPIED', { from:CUSTOMER.ca, to });
+    $('#modal').innerHTML=''; toast('Preferences copied to contract account '+to+'.'); render(); return;
+  }
+  if (t.dataset.do === 'applyall') {
+    audit('*','APPLY_ALL','—', CUSTOMER.contracts.length+' account(s)', 'CSR_APPLY_ALL');
+    notifyHost('PREFERENCES_APPLIED_ALL', { accounts:CUSTOMER.contracts.map(c=>c.ca) });
+    $('#modal').innerHTML=''; toast('Applied to all '+CUSTOMER.contracts.length+' contract accounts.'); render(); return;
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.tog) { const ty=t.dataset.tog; stageSet(ty, effective(ty).channel, t.checked?'IN':'OUT'); return; }
+  if (t.dataset.ch)  { const ty=t.dataset.ch;  stageSet(ty, t.value, effective(ty).value==='NONE'?'IN':effective(ty).value); return; }
+});
+
+// Accept context pushed by the host (Service Cloud V2) after load, if it sends any.
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (!d || d.target !== 'CPC' || !d.context) return;
+  if (d.context.bp) CUSTOMER.bp = d.context.bp;
+  if (d.context.ca) CUSTOMER.ca = d.context.ca;
+  if (d.context.name) CUSTOMER.name = d.context.name;
+  render();
+});
+
+render();
+notifyHost('CPC_READY', { mode:CTX.mode });
+</script>
