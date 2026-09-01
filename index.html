@@ -105,6 +105,35 @@
   @media(max-width:560px){.g4{grid-template-columns:1fr}}
 </style>
 
+<div id="nammi-gate" style="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--paper);font-family:var(--font);padding:24px">
+  <div style="background:var(--surface);border:1px solid var(--hair);border-radius:12px;box-shadow:var(--shadow);padding:32px;max-width:400px;width:100%">
+    <p style="margin:0;font-size:.72rem;font-weight:700;letter-spacing:.14em;color:var(--brand)">PROTECTED DEMO</p>
+    <h1 style="margin:14px 0 0;font-size:1.4rem">SmartGrid Customer Portal</h1>
+    <p class="muted" style="margin:10px 0 0;font-size:.88rem">Enter the access password to view the interactive product demo.</p>
+    <form id="nammi-gate-form" style="margin-top:20px">
+      <input id="nammi-gate-pw" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" style="width:100%;padding:10px 12px;font-size:.94rem;border:1px solid var(--hair);border-radius:8px;background:var(--surface2);color:var(--ink)">
+      <p id="nammi-gate-err" role="alert" style="display:none;margin:8px 0 0;font-size:.85rem;color:var(--crit)">Incorrect password. Please try again.</p>
+      <button type="submit" class="btn primary" style="width:100%;margin-top:12px;padding:10px">Enter</button>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+  var gate=document.getElementById('nammi-gate');
+  try{if(sessionStorage.getItem('nammi-demo-unlocked')==='1'){gate.remove();return;}}catch(e){}
+  var form=document.getElementById('nammi-gate-form'),pw=document.getElementById('nammi-gate-pw'),err=document.getElementById('nammi-gate-err');
+  form.addEventListener('submit',function(e){
+    e.preventDefault();
+    if(pw.value==='Shanthi@143'){
+      try{sessionStorage.setItem('nammi-demo-unlocked','1');}catch(e2){}
+      gate.remove();
+    }else{err.style.display='block';pw.select();}
+  });
+  pw.addEventListener('input',function(){err.style.display='none';});
+  pw.focus();
+})();
+</script>
+
 <div id="root"></div>
 <div id="toasts" class="toasts"></div>
 <div id="modal"></div>
